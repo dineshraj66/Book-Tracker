@@ -7,7 +7,7 @@
     <link rel="manifest" href="./manifest.json">
     <link rel="apple-touch-icon" href="./icon.png">
     <link rel="stylesheet" href="./style.css">
-</head>
+    </head>
 <body>
     <div id="mainContainer" class="container">
         <div id="libraryView">
@@ -18,29 +18,49 @@
                 </div>
                 <div class="progress-container"><div id="progressBar" class="progress-fill"></div></div>
             </div>
-            <div class="input-section">
+
+            <div class="section-header">
+                <h2 class="section-title">📖 Reading Now</h2>
+                <button onclick="toggleInput()" id="toggleBtn" class="plus-btn">+</button>
+            </div>
+
+            <div id="inputWrapper" class="input-section" style="display: none;">
                 <input type="text" id="bookTitle" placeholder="Book Name">
                 <input type="text" id="bookAuthor" placeholder="Author">
-                <div class="row"><input type="text" id="bookCategory" placeholder="Category"><input type="number" id="totalPages" placeholder="Pages"></div>
+                <div class="row">
+                    <input type="text" id="bookCategory" placeholder="Category">
+                    <input type="number" id="totalPages" placeholder="Pages">
+                </div>
                 <button onclick="addBook()">Add New Book</button>
             </div>
-            <h2 class="section-title">📖 Reading Now</h2>
+
             <div id="activeList"></div>
+            
             <h2 class="section-title">✅ Finished</h2>
             <div id="historyList"></div>
         </div>
+
         <div id="statsView" style="display: none;">
             <h2>📊 Performance Stats</h2>
-            <div class="stat-card streak"><small>Current Streak</small><h2 id="currentStreak">0 Days</h2></div>
-            <div class="stat-card gold"><small>Fastest Completion</small><h3 id="fastestBook">-</h3><span id="fastestDays">0 days</span></div>
+            <div class="stat-card streak">
+                <small>Current Reading Streak</small>
+                <h2 id="currentStreak">0 Days</h2>
+            </div>
+            <div class="stat-card gold">
+                <small>Fastest Completion</small>
+                <h3 id="fastestBook">-</h3>
+                <span id="fastestDays">0 days</span>
+            </div>
             <h3>Monthly Progress</h3>
             <div id="monthlyStats" class="monthly-grid"></div>
         </div>
     </div>
+
     <nav class="bottom-nav">
         <div onclick="showView('library')">📚 Library</div>
         <div onclick="showView('stats')">📈 Stats</div>
     </nav>
+
     <script type="module" src="./script.js"></script>
 </body>
 </html>

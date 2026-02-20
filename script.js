@@ -19,15 +19,43 @@ const booksRef = collection(db, 'books');
 let myBooks = [];
 let myGoal = localStorage.getItem('readingGoal') || 10;
 
-// Listen for Data
+// Listen for real-time updates
 onSnapshot(query(booksRef, orderBy('startDate', 'desc')), (snapshot) => {
     myBooks = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     renderLibrary();
     updateStats();
 });
 
+// Navigation & Toggle Logic
+window.showView = (v) => {
+    document.getElementById('libraryView').style.display = v === 'library' ? 'block' : 'none';
+    document.getElementById('statsView').style.display = v === 'stats' ? 'block' : 'none';
+};
+
+window.toggleInput = () => {
+    const wrapper = document.getElementById('inputWrapper');
+    const btn = document.getElementById('toggleBtn');
+    if (wrapper.style.display === 'none') {
+        wrapper.style.display = 'flex';
+        btn.classList.add('close-style');
+    } else {
+        wrapper.style.display = 'none';
+        btn.classList.remove('close-style');
+    }
+};
+
+// Goal Logic
+window.setGoal = () => {
+    let g = prompt("Set Yearly Goal", myGoal);
+    if(g && !isNaN(g)) {
+        myGoal = parseInt(g);
+        localStorage.setItem('readingGoal', myGoal);
+        renderLibrary();
+    }
+};
+
 // Add Book
-window.addBook = async function() {
+window.addBook = async () => {
     const title = document.getElementById('bookTitle').value;
     const author = document.getElementById('bookAuthor').value;
     const total = parseInt(document.getElementById('totalPages').value);
@@ -39,11 +67,12 @@ window.addBook = async function() {
             completionDate: null
         });
         document.querySelectorAll('.input-section input').forEach(i => i.value = '');
+        window.toggleInput(); // Auto-close form
     }
 };
 
-// Update Progress
-window.updatePages = async function(id, val) {
+// Update & Delete
+window.updatePages = async (id, val) => {
     const pages = parseInt(val);
     const book = myBooks.find(b => b.id === id);
     if (pages >= 0 && pages <= book.totalPages) {
@@ -54,7 +83,9 @@ window.updatePages = async function(id, val) {
     }
 };
 
-// Render Logic
+window.deleteBook = async (id) => { if(confirm("Delete book?")) await deleteDoc(doc(db, 'books', id)); };
+
+// UI Rendering
 function renderLibrary() {
     const activeList = document.getElementById('activeList');
     const historyList = document.getElementById('historyList');
@@ -67,7 +98,7 @@ function renderLibrary() {
             completedCount++;
             historyList.innerHTML += `
                 <div class="history-card">
-                    <div><strong>${book.title}</strong></div>
+                    <strong>${book.title}</strong>
                     <span class="days-tag">${calculateDays(book.startDate, book.completionDate)} days</span>
                 </div>`;
         } else {
@@ -85,17 +116,11 @@ function renderLibrary() {
                 </div>`;
         }
     });
-    document.getElementById('yearCountHeader').innerText = completedCount;
-    document.getElementById('progressBar').style.width = (completedCount / myGoal * 100) + "%";
-}
 
-// Global Helpers
-window.deleteBook = async (id) => { if(confirm("Delete?")) await deleteDoc(doc(db, 'books', id)); };
-window.showView = (v) => { 
-    document.getElementById('libraryView').style.display = v === 'library' ? 'block' : 'none';
-    document.getElementById('statsView').style.display = v === 'stats' ? 'block' : 'none';
-};
-window.setGoal = () => { let g = prompt("Goal?", myGoal); if(g) { myGoal = g; localStorage.setItem('readingGoal', g); renderLibrary(); } };
+    document.getElementById('yearCountHeader').innerText = completedCount;
+    document.getElementById('goalDisplay').innerText = myGoal;
+    document.getElementById('progressBar').style.width = Math.min((completedCount / myGoal) * 100, 100) + "%";
+}
 
 function calculateDays(s, e) { return Math.ceil((new Date(e) - new Date(s)) / (1000*60*60*24)) || 1; }
 
@@ -106,14 +131,11 @@ function logActivity() {
 }
 
 function updateStats() {
-    // Basic streak calculation
     let logs = JSON.parse(localStorage.getItem('activityLog')) || [];
     document.getElementById('currentStreak').innerText = logs.length + " Days";
-    
-    // Monthly & Fastest logic would go here
     const completed = myBooks.filter(b => b.completionDate);
     if(completed.length > 0) {
-        let fastest = completed.sort((a,b) => calculateDays(a.startDate, a.completionDate) - calculateDays(b.startDate, b.completionDate))[0];
+        let fastest = [...completed].sort((a,b) => calculateDays(a.startDate, a.completionDate) - calculateDays(b.startDate, b.completionDate))[0];
         document.getElementById('fastestBook').innerText = fastest.title;
         document.getElementById('fastestDays').innerText = calculateDays(fastest.startDate, fastest.completionDate) + " days";
     }
