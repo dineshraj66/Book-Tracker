@@ -286,29 +286,28 @@ async function updatePage(bookId, newPage) {
   const today = todayStr();
   const log = book.pageLogs.find(l => l.date === today);
   if (log) log.page = newPage; else book.pageLogs.push({ date: today, page: newPage });
-  await saveBook(book);
-  renderHome();
-  showToast('✅ Progress updated!');
+
+  // Auto-complete when last page reached
+  if (newPage >= book.totalPages) {
+    book.status = 'completed';
+    book.endDate = today;
+    await saveBook(book);
+    updateGoalCard();
+    renderHome();
+    showCompletionToast(book.title);
+  } else {
+    await saveBook(book);
+    renderHome();
+    showToast('✅ Progress saved');
+  }
 }
 
-window.handlePageUpdate = function(id) {
+// Auto-save on blur
+window.handlePageBlur = function(id) {
   const inp = document.getElementById('pi-' + id);
   if (!inp) return;
   const v = parseInt(inp.value);
   if (!isNaN(v)) updatePage(id, v);
-};
-
-// ---- Complete ----
-window.completeBook = async function(id) {
-  const book = books.find(b => b.id === id);
-  if (!book) return;
-  book.status = 'completed';
-  book.currentPage = book.totalPages;
-  book.endDate = todayStr();
-  await saveBook(book);
-  updateGoalCard();
-  renderHome();
-  showToast('🏆 Book completed! Amazing!');
 };
 
 // ---- Delete ----
@@ -377,23 +376,18 @@ function renderHome() {
           <div class="page-update-col">
             <div class="page-update-row">
               <input type="number" class="page-input" id="pi-${book.id}"
-                value="${book.currentPage}" min="0" max="${book.totalPages}" />
+                value="${book.currentPage}" min="0" max="${book.totalPages}"
+                onblur="handlePageBlur('${book.id}')"
+                onkeydown="if(event.key==='Enter')this.blur()" />
               <span class="page-of">/ ${book.totalPages}</span>
-              <button class="update-btn" onclick="handlePageUpdate('${book.id}')">Update</button>
             </div>
-            <button class="complete-btn" onclick="completeBook('${book.id}')">✓ Mark Complete</button>
+            <div class="page-hint">Tap outside to save · Last page auto-completes</div>
           </div>
         </div>
       </div>
     </div>`;
   }).join('');
 
-  // Enter key on page inputs
-  container.querySelectorAll('.page-input').forEach(inp => {
-    inp.addEventListener('keydown', e => {
-      if (e.key === 'Enter') handlePageUpdate(inp.id.replace('pi-', ''));
-    });
-  });
 }
 
 // ---- Render Library ----
@@ -557,6 +551,34 @@ function showToast(msg) {
   t.classList.add('show');
   clearTimeout(_toastTimer);
   _toastTimer = setTimeout(()=>t.classList.remove('show'), 2800);
+}
+
+function showCompletionToast(title) {
+  let t = document.getElementById('_completion_toast');
+  if (!t) {
+    t = document.createElement('div');
+    t.id = '_completion_toast';
+    t.className = 'toast toast-completion';
+    document.body.appendChild(t);
+  }
+  t.innerHTML = `🏆 "${esc(title)}" moved to History! <span class="toast-undo-btn">Undo</span>`;
+  t.classList.add('show');
+
+  t.querySelector('.toast-undo-btn').onclick = async () => {
+    const book = books.find(b => b.title === title && b.status === 'completed');
+    if (book) {
+      book.status = 'reading';
+      book.endDate = null;
+      book.currentPage = book.totalPages - 1;
+      await saveBook(book);
+      updateGoalCard();
+      renderHome();
+    }
+    t.classList.remove('show');
+  };
+
+  clearTimeout(t._timer);
+  t._timer = setTimeout(() => t.classList.remove('show'), 5000);
 }
 
 // ================================

@@ -186,22 +186,20 @@ body { font-family: var(--font-b); background: var(--bg); color: var(--text); mi
 }
 .page-input:focus { border-color: var(--teal); }
 .page-of { font-size: 0.78rem; color: var(--text3); }
-.update-btn {
-  background: var(--teal); color: #0d1117; border: none;
-  border-radius: 9px; font-family: var(--font-b); font-size: 0.78rem;
-  font-weight: 800; padding: 0.42rem 0.8rem; cursor: pointer;
-  transition: opacity 0.2s, transform 0.1s;
+.page-hint {
+  font-size: 0.68rem; color: var(--text3);
+  font-style: italic; letter-spacing: 0.01em;
 }
-.update-btn:hover { opacity: 0.85; }
-.update-btn:active { transform: scale(0.96); }
-.complete-btn {
-  background: rgba(52,211,153,0.1); color: var(--green);
-  border: 1px solid rgba(52,211,153,0.25); border-radius: 9px;
-  font-family: var(--font-b); font-size: 0.78rem; font-weight: 700;
-  padding: 0.42rem 0.9rem; cursor: pointer; transition: background 0.2s;
-  width: 100%;
+.toast-completion {
+  background: var(--surface2) !important;
+  border: 1px solid rgba(52,211,153,0.4) !important;
+  display: flex; align-items: center; gap: 0.6rem;
 }
-.complete-btn:hover { background: rgba(52,211,153,0.2); }
+.toast-undo-btn {
+  color: var(--teal); font-weight: 800; font-size: 0.78rem;
+  cursor: pointer; text-decoration: underline; text-underline-offset: 2px;
+  white-space: nowrap; flex-shrink: 0;
+}
 
 /* ── Library Card ── */
 .lib-card {
