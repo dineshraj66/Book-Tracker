@@ -570,6 +570,7 @@ input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.5); cur
       <li><a class="nav-link" data-page="stats" href="#">📊 <span>Stats</span></a></li>
     </ul>
     <button class="sidebar-fab" id="fab-desktop">＋ Add Book</button>
+    <button class="sidebar-sync-btn" id="sidebar-sync-btn">🔄 Sync Devices</button>
   </nav>
 
   <main class="main-content">
@@ -713,6 +714,80 @@ input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.5); cur
   </div>
 </div>
 
+<!-- EDIT BOOK MODAL -->
+<div class="modal-overlay" id="edit-modal-overlay">
+  <div class="modal">
+    <div class="modal-header">
+      <h2 class="modal-title">✏️ Edit Book</h2>
+      <button class="modal-close" id="edit-modal-close">✕</button>
+    </div>
+    <form id="edit-book-form" autocomplete="off">
+      <input type="hidden" id="edit-book-id" />
+      <div class="form-group">
+        <label class="form-label">Book Cover</label>
+        <div class="cover-upload" id="edit-cover-upload">
+          <img id="edit-cover-preview" class="cover-preview" style="display:none" alt="Cover" />
+          <div class="cover-placeholder" id="edit-cover-placeholder">
+            <div style="font-size:2rem">📷</div>
+            <div>Tap to change cover</div>
+          </div>
+          <input type="file" id="edit-cover-file" accept="image/*" style="display:none" />
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Title *</label>
+          <input type="text" class="form-input" id="edit-title" required />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Author *</label>
+          <input type="text" class="form-input" id="edit-author" required />
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Category *</label>
+          <select class="form-input" id="edit-category" required>
+            <option value="">Select…</option>
+            <option>Self Development</option>
+            <option>Biography</option>
+            <option>Trading</option>
+            <option>Relationship</option>
+            <option>Mindset</option>
+            <option>Finance</option>
+            <option>Health</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Total Pages *</label>
+          <input type="number" class="form-input" id="edit-pages" min="1" required />
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Start Date</label>
+          <input type="date" class="form-input" id="edit-start-date" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">End Date</label>
+          <input type="date" class="form-input" id="edit-end-date" />
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Status</label>
+        <select class="form-input" id="edit-status">
+          <option value="reading">Currently Reading</option>
+          <option value="completed">Completed</option>
+        </select>
+      </div>
+      <div class="form-row" style="gap:0.5rem;margin-top:0.5rem">
+        <button type="submit" class="btn-primary">💾 Save Changes</button>
+        <button type="button" class="btn-delete" id="edit-delete-btn">🗑 Delete</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 <!-- GOAL MODAL -->
 <div class="modal-overlay" id="goal-modal-overlay">
   <div class="modal">
@@ -765,6 +840,34 @@ input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.5); cur
   </div>
 </div>
 
+<!-- SYNC MODAL -->
+<div class="modal-overlay" id="sync-modal-overlay">
+  <div class="modal">
+    <div class="modal-header">
+      <h2 class="modal-title">🔄 Sync Across Devices</h2>
+      <button class="modal-close" id="sync-modal-close">✕</button>
+    </div>
+    <p style="font-size:0.82rem;color:var(--text2);margin-bottom:1.25rem;line-height:1.6">
+      Since Firebase is not configured, use this to transfer data between devices manually.
+    </p>
+    <div class="sync-tabs">
+      <button class="sync-tab active" data-tab="export">📤 Export</button>
+      <button class="sync-tab" data-tab="import-sync">📥 Import</button>
+    </div>
+    <div id="sync-export-panel">
+      <p style="font-size:0.78rem;color:var(--text3);margin-bottom:0.75rem">Copy this code on your current device, then paste it on your other device.</p>
+      <textarea id="sync-export-text" class="sync-textarea" readonly></textarea>
+      <button class="btn-primary" id="sync-copy-btn" style="margin-top:0.75rem">📋 Copy to Clipboard</button>
+    </div>
+    <div id="sync-import-panel" style="display:none">
+      <p style="font-size:0.78rem;color:var(--text3);margin-bottom:0.75rem">Paste the sync code from your other device here.</p>
+      <textarea id="sync-import-text" class="sync-textarea" placeholder="Paste sync code here…"></textarea>
+      <button class="btn-primary" id="sync-import-btn" style="margin-top:0.75rem">📥 Import Data</button>
+    </div>
+    <div id="sync-result" style="display:none;text-align:center;padding:1rem"></div>
+  </div>
+</div>
+
 <!-- Install Banner -->
 <div class="install-banner" id="install-banner">
   <div class="install-banner-left">
@@ -790,12 +893,12 @@ input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.5); cur
 // ---- Firebase Config ----
 // Replace with your own Firebase project config
 const FIREBASE_CONFIG = {
-  apiKey: "YOUR_API_KEY",
-  authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
-  projectId: "YOUR_PROJECT_ID",
-  storageBucket: "YOUR_PROJECT_ID.appspot.com",
-  messagingSenderId: "YOUR_SENDER_ID",
-  appId: "YOUR_APP_ID"
+  apiKey: "AIzaSyD-2SCMUJsrkmmWo4IUmWpjPu5TC99C-ho",
+  authDomain: "book-tracker-5bc5f.firebaseapp.com",
+  projectId: "book-tracker-5bc5f",
+  storageBucket: "book-tracker-5bc5f.firebasestorage.app",
+  messagingSenderId: "689545850122",
+  appId: "1:689545850122:web:f0d244bcf9a4c9e2c51ef3"
 };
 
 // ---- Firebase Init ----
@@ -854,6 +957,8 @@ function initApp() {
   setupModals();
   setupGoal();
   setupCoverUpload();
+  setupEditModal();
+  setupSync();
   setupImport();
   loadData();
 }
@@ -894,22 +999,51 @@ async function loadData() {
     const d = lsLoad();
     books = d.books || [];
     goal  = d.goal  || { year: new Date().getFullYear(), target: 20 };
+    renderHome();
   } else {
     try {
-      const [bs, gs] = await Promise.all([
-        db.collection('books').get(),
-        db.collection('settings').doc('goal').get()
-      ]);
-      books = bs.docs.map(d => ({ id: d.id, ...d.data() }));
+      // Load goal once
+      const gs = await db.collection('settings').doc('goal').get();
       if (gs.exists) goal = gs.data();
+
+      // Real-time listener for books — auto-syncs across all devices
+      db.collection('books').onSnapshot(snapshot => {
+        const covers = JSON.parse(localStorage.getItem('pageturn_covers') || '{}');
+        books = snapshot.docs.map(d => ({
+          id: d.id,
+          ...d.data(),
+          cover: covers[d.id] || null  // restore cover from local cache
+        }));
+        // Re-render whichever page is active
+        const activePage = document.querySelector('.page.active')?.id?.replace('page-','');
+        if (activePage === 'home')    renderHome();
+        if (activePage === 'library') renderLibrary();
+        if (activePage === 'history') renderHistory();
+        if (activePage === 'stats')   renderStats();
+        updateGoalCard();
+      }, err => {
+        console.error('Firestore listener failed:', err);
+        useLocal = true;
+        const d = lsLoad();
+        books = d.books || [];
+        goal  = d.goal  || { year: new Date().getFullYear(), target: 20 };
+        renderHome();
+      });
+
+      // Also listen for goal changes
+      db.collection('settings').doc('goal').onSnapshot(snap => {
+        if (snap.exists) { goal = snap.data(); updateGoalCard(); }
+      });
+
     } catch(e) {
+      console.error('Firestore init failed:', e);
       useLocal = true;
       const d = lsLoad();
       books = d.books || [];
       goal  = d.goal  || { year: new Date().getFullYear(), target: 20 };
+      renderHome();
     }
   }
-  renderHome();
 }
 
 async function saveBook(book) {
@@ -919,7 +1053,16 @@ async function saveBook(book) {
     if (i >= 0) d.books[i] = book; else d.books.push(book);
     lsSave(d);
   } else {
-    const { id, ...data } = book;
+    // Save cover separately in localStorage (too large for Firestore)
+    if (book.cover) {
+      try {
+        const covers = JSON.parse(localStorage.getItem('pageturn_covers') || '{}');
+        covers[book.id] = book.cover;
+        localStorage.setItem('pageturn_covers', JSON.stringify(covers));
+      } catch(e) {}
+    }
+    // Strip cover before saving to Firestore
+    const { id, cover, ...data } = book;
     await db.collection('books').doc(id).set(data);
   }
 }
@@ -980,22 +1123,6 @@ function setupModals() {
   document.getElementById('fab-main').addEventListener('click', openModal);
   document.getElementById('fab-desktop').addEventListener('click', openModal);
 
-  // Goal modal
-  const gOverlay = document.getElementById('goal-modal-overlay');
-  document.getElementById('goal-modal-close').addEventListener('click', closeGoalModal);
-  gOverlay.addEventListener('click', e => { if (e.target === gOverlay) closeGoalModal(); });
-  document.getElementById('goal-form').addEventListener('submit', async e => {
-    e.preventDefault();
-    const yr  = parseInt(document.getElementById('goal-year-input').value);
-    const tgt = parseInt(document.getElementById('goal-target-input').value);
-    if (yr && tgt) {
-      goal = { year: yr, target: tgt };
-      await saveGoalData();
-      updateGoalCard();
-      closeGoalModal();
-    }
-  });
-
   document.getElementById('book-start-date').value = todayStr();
 }
 
@@ -1019,7 +1146,25 @@ function closeModal() {
 
 // ---- Goal ----
 function setupGoal() {
-  document.getElementById('goal-edit-btn').addEventListener('click', openGoalModal);
+  const editBtn = document.getElementById('goal-edit-btn');
+  const closeBtn = document.getElementById('goal-modal-close');
+  const overlay = document.getElementById('goal-modal-overlay');
+  if (editBtn) editBtn.onclick = openGoalModal;
+  if (closeBtn) closeBtn.onclick = closeGoalModal;
+  if (overlay) overlay.addEventListener('click', e => { if (e.target === overlay) closeGoalModal(); });
+  const form = document.getElementById('goal-form');
+  if (form) form.addEventListener('submit', async e => {
+    e.preventDefault();
+    const yr  = parseInt(document.getElementById('goal-year-input').value);
+    const tgt = parseInt(document.getElementById('goal-target-input').value);
+    if (yr && tgt) {
+      goal = { year: yr, target: tgt };
+      await saveGoalData();
+      updateGoalCard();
+      closeGoalModal();
+      showToast('🎯 Goal updated!');
+    }
+  });
 }
 function openGoalModal() {
   document.getElementById('goal-year-input').value = goal.year;
@@ -1151,7 +1296,10 @@ function renderHome() {
     <div class="book-card">
       ${coverThumb(book, 'book-cover-thumb', 'book-cover-placeholder')}
       <div class="book-card-body">
-        <div class="cat-badge ${catClass}">${esc(book.category)}</div>
+        <div class="book-card-top-row">
+          <div class="cat-badge ${catClass}">${esc(book.category)}</div>
+          <button class="card-edit-btn" onclick="openEditModal('${book.id}')" title="Edit">✏️</button>
+        </div>
         <div class="book-title-text">${esc(book.title)}</div>
         <div class="book-author-text">by ${esc(book.author)}</div>
         <div class="progress-row">
@@ -1173,7 +1321,6 @@ function renderHome() {
     </div>`;
   }).join('');
 
-  // Enter key on page inputs
   container.querySelectorAll('.page-input').forEach(inp => {
     inp.addEventListener('keydown', e => {
       if (e.key === 'Enter') handlePageUpdate(inp.id.replace('pi-', ''));
@@ -1215,7 +1362,7 @@ function renderLibrary() {
           <span class="lib-mini-pct" style="color:${color}">${pct}%</span>
         </div>
       </div>
-      <button class="lib-del-btn" onclick="deleteBook('${book.id}')" title="Remove">🗑</button>
+      <button class="card-edit-btn" onclick="openEditModal('${book.id}')" title="Edit">✏️</button>
     </div>`;
   }).join('');
 }
@@ -1243,9 +1390,12 @@ function renderHistory() {
         <div class="hist-author">by ${esc(book.author)}</div>
         <div class="hist-meta">${esc(book.category)} · Finished ${dateFmt}</div>
       </div>
-      <div class="hist-days">
-        <div class="hist-days-num">${days}</div>
-        <div class="hist-days-lbl">days</div>
+      <div class="hist-right">
+        <div class="hist-days">
+          <div class="hist-days-num">${days}</div>
+          <div class="hist-days-lbl">days</div>
+        </div>
+        <button class="card-edit-btn" onclick="openEditModal('${book.id}')" title="Edit">✏️</button>
       </div>
     </div>`;
   }).join('');
@@ -1342,6 +1492,210 @@ function showToast(msg) {
   t.classList.add('show');
   clearTimeout(_toastTimer);
   _toastTimer = setTimeout(()=>t.classList.remove('show'), 2800);
+}
+
+// ================================
+//  EDIT BOOK
+// ================================
+let editCoverDataUrl = null;
+
+window.openEditModal = function(bookId) {
+  const book = books.find(b => b.id === bookId);
+  if (!book) return;
+
+  document.getElementById('edit-book-id').value       = bookId;
+  document.getElementById('edit-title').value         = book.title || '';
+  document.getElementById('edit-author').value        = book.author || '';
+  document.getElementById('edit-category').value      = book.category || '';
+  document.getElementById('edit-pages').value         = book.totalPages || '';
+  document.getElementById('edit-start-date').value    = book.startDate || '';
+  document.getElementById('edit-end-date').value      = book.endDate || '';
+  document.getElementById('edit-status').value        = book.status || 'reading';
+
+  // Cover preview
+  editCoverDataUrl = book.cover || null;
+  const prev = document.getElementById('edit-cover-preview');
+  const ph   = document.getElementById('edit-cover-placeholder');
+  if (book.cover) { prev.src = book.cover; prev.style.display='block'; ph.style.display='none'; }
+  else { prev.style.display='none'; ph.style.display='flex'; }
+
+  document.getElementById('edit-modal-overlay').classList.add('open');
+};
+
+function setupEditModal() {
+  const overlay  = document.getElementById('edit-modal-overlay');
+  const closeBtn = document.getElementById('edit-modal-close');
+  const form     = document.getElementById('edit-book-form');
+  const delBtn   = document.getElementById('edit-delete-btn');
+  const coverUpload = document.getElementById('edit-cover-upload');
+  const coverFile   = document.getElementById('edit-cover-file');
+  const coverPrev   = document.getElementById('edit-cover-preview');
+  const coverPh     = document.getElementById('edit-cover-placeholder');
+
+  if (!overlay) return;
+
+  closeBtn.onclick = () => overlay.classList.remove('open');
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.classList.remove('open'); });
+
+  // Cover change
+  coverUpload.addEventListener('click', () => coverFile.click());
+  coverFile.addEventListener('change', () => {
+    const file = coverFile.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = e => {
+      editCoverDataUrl = e.target.result;
+      coverPrev.src = editCoverDataUrl;
+      coverPrev.style.display = 'block';
+      coverPh.style.display = 'none';
+    };
+    reader.readAsDataURL(file);
+  });
+
+  form.addEventListener('submit', async e => {
+    e.preventDefault();
+    const id = document.getElementById('edit-book-id').value;
+    const book = books.find(b => b.id === id);
+    if (!book) return;
+
+    book.title      = document.getElementById('edit-title').value.trim();
+    book.author     = document.getElementById('edit-author').value.trim();
+    book.category   = document.getElementById('edit-category').value;
+    book.totalPages = parseInt(document.getElementById('edit-pages').value) || book.totalPages;
+    book.startDate  = document.getElementById('edit-start-date').value || null;
+    book.endDate    = document.getElementById('edit-end-date').value || null;
+    book.status     = document.getElementById('edit-status').value;
+    if (editCoverDataUrl !== undefined) book.cover = editCoverDataUrl;
+    if (book.status === 'completed' && !book.endDate) book.endDate = todayStr();
+    if (book.status === 'completed') book.currentPage = book.totalPages;
+
+    await saveBook(book);
+    overlay.classList.remove('open');
+    showToast('✅ Book updated!');
+    // Refresh whichever page is active
+    const activePage = document.querySelector('.page.active')?.id?.replace('page-','');
+    if (activePage === 'home')    renderHome();
+    if (activePage === 'library') renderLibrary();
+    if (activePage === 'history') { renderHistory(); updateGoalCard(); }
+  });
+
+  delBtn.addEventListener('click', async () => {
+    const id = document.getElementById('edit-book-id').value;
+    if (!confirm('Delete this book permanently?')) return;
+    books = books.filter(b => b.id !== id);
+    await deleteBookData(id);
+    overlay.classList.remove('open');
+    showToast('🗑 Book deleted.');
+    renderHome(); renderHistory(); renderLibrary(); updateGoalCard();
+  });
+}
+
+// ================================
+//  SYNC (Export / Import JSON)
+// ================================
+function setupSync() {
+  const syncBtn  = document.getElementById('sidebar-sync-btn');
+  const overlay  = document.getElementById('sync-modal-overlay');
+  const closeBtn = document.getElementById('sync-modal-close');
+  const tabs     = document.querySelectorAll('.sync-tab');
+  const exportPanel = document.getElementById('sync-export-panel');
+  const importPanel = document.getElementById('sync-import-panel');
+  const copyBtn  = document.getElementById('sync-copy-btn');
+  const importBtn= document.getElementById('sync-import-btn');
+  const resultDiv= document.getElementById('sync-result');
+
+  if (!syncBtn || !overlay) return;
+
+  function openSync() {
+    const data = JSON.stringify({ books, goal }, null, 2);
+    document.getElementById('sync-export-text').value = data;
+    exportPanel.style.display = 'block';
+    importPanel.style.display = 'none';
+    resultDiv.style.display   = 'none';
+    document.querySelector('.sync-tab[data-tab="export"]').classList.add('active');
+    document.querySelector('.sync-tab[data-tab="import-sync"]').classList.remove('active');
+    overlay.classList.add('open');
+  }
+
+  syncBtn.addEventListener('click', openSync);
+  closeBtn.onclick = () => overlay.classList.remove('open');
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.classList.remove('open'); });
+
+  tabs.forEach(tab => {
+    tab.addEventListener('click', () => {
+      tabs.forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      const t = tab.dataset.tab;
+      exportPanel.style.display = t === 'export' ? 'block' : 'none';
+      importPanel.style.display = t === 'import-sync' ? 'block' : 'none';
+      resultDiv.style.display   = 'none';
+      if (t === 'export') {
+        document.getElementById('sync-export-text').value = JSON.stringify({ books, goal }, null, 2);
+      }
+    });
+  });
+
+  copyBtn.addEventListener('click', async () => {
+    const text = document.getElementById('sync-export-text').value;
+    try {
+      await navigator.clipboard.writeText(text);
+      copyBtn.textContent = '✅ Copied!';
+      setTimeout(() => copyBtn.textContent = '📋 Copy to Clipboard', 2000);
+    } catch(e) {
+      document.getElementById('sync-export-text').select();
+      document.execCommand('copy');
+      copyBtn.textContent = '✅ Copied!';
+      setTimeout(() => copyBtn.textContent = '📋 Copy to Clipboard', 2000);
+    }
+  });
+
+  importBtn.addEventListener('click', async () => {
+    const text = document.getElementById('sync-import-text').value.trim();
+    if (!text) { showSyncResult('❌ Please paste sync data first.', false); return; }
+    try {
+      const data = JSON.parse(text);
+      const importedBooks = data.books || (Array.isArray(data) ? data : []);
+      const importedGoal  = data.goal || null;
+
+      if (!importedBooks.length) { showSyncResult('❌ No books found in data.', false); return; }
+
+      // Merge — add books not already present by id
+      let added = 0;
+      for (const b of importedBooks) {
+        if (!books.find(x => x.id === b.id)) {
+          books.push(b);
+          await saveBook(b);
+          added++;
+        } else {
+          // Update existing book
+          const idx = books.findIndex(x => x.id === b.id);
+          books[idx] = b;
+          await saveBook(b);
+        }
+      }
+      if (importedGoal) {
+        goal = importedGoal;
+        await saveGoalData();
+      }
+
+      showSyncResult(`✅ Synced ${importedBooks.length} books (${added} new)!`, true);
+      updateGoalCard();
+    } catch(e) {
+      showSyncResult('❌ Invalid data: ' + e.message, false);
+    }
+  });
+
+  function showSyncResult(msg, success) {
+    exportPanel.style.display = 'none';
+    importPanel.style.display = 'none';
+    resultDiv.style.display   = 'block';
+    resultDiv.innerHTML = `<div style="font-size:1.4rem;margin-bottom:0.5rem">${success?'🎉':'⚠️'}</div>
+      <div style="font-weight:700;color:${success?'var(--green)':'var(--coral)'}">${msg}</div>`;
+    if (success) setTimeout(() => {
+      overlay.classList.remove('open');
+      renderHome(); renderHistory(); renderLibrary();
+    }, 1800);
+  }
 }
 
 // ================================

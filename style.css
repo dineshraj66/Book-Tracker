@@ -586,3 +586,49 @@ input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.5); cur
   color: var(--teal); line-height: 1;
 }
 .import-stat span:last-child { font-size: 0.65rem; color: var(--text3); text-transform: uppercase; letter-spacing: 0.08em; }
+
+/* ── Edit button on cards ── */
+.book-card-top-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.2rem; }
+.card-edit-btn {
+  background: rgba(56,189,248,0.08); border: 1px solid rgba(56,189,248,0.2);
+  color: var(--teal); font-size: 0.8rem; padding: 0.25rem 0.5rem;
+  border-radius: 8px; cursor: pointer; transition: background 0.2s; flex-shrink: 0;
+}
+.card-edit-btn:hover { background: rgba(56,189,248,0.18); }
+
+/* History right column */
+.hist-right { display: flex; flex-direction: column; align-items: flex-end; gap: 0.4rem; flex-shrink: 0; }
+
+/* Delete button in edit modal */
+.btn-delete {
+  flex: 1; background: rgba(251,113,133,0.1); color: var(--coral);
+  border: 1px solid rgba(251,113,133,0.3); border-radius: var(--radius-sm);
+  font-family: var(--font-b); font-size: 0.9rem; font-weight: 700;
+  padding: 0.75rem; cursor: pointer; transition: background 0.2s;
+}
+.btn-delete:hover { background: rgba(251,113,133,0.2); }
+
+/* Sidebar sync button */
+.sidebar-sync-btn {
+  background: rgba(56,189,248,0.08); border: 1px solid rgba(56,189,248,0.2);
+  color: var(--teal); font-family: var(--font-b); font-size: 0.82rem; font-weight: 700;
+  padding: 0.65rem 1rem; border-radius: var(--radius-sm); cursor: pointer;
+  transition: background 0.2s; text-align: center;
+}
+.sidebar-sync-btn:hover { background: rgba(56,189,248,0.15); }
+
+/* Sync modal */
+.sync-tabs { display: flex; gap: 0.5rem; margin-bottom: 1.25rem; }
+.sync-tab {
+  flex: 1; background: var(--surface); border: 1px solid var(--border);
+  color: var(--text2); font-family: var(--font-b); font-size: 0.82rem; font-weight: 700;
+  padding: 0.55rem; border-radius: 10px; cursor: pointer; transition: all 0.2s;
+}
+.sync-tab.active { background: rgba(56,189,248,0.12); border-color: rgba(56,189,248,0.35); color: var(--teal); }
+.sync-textarea {
+  width: 100%; height: 140px; background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); color: var(--text); font-family: monospace;
+  font-size: 0.72rem; padding: 0.75rem; resize: vertical; outline: none;
+  transition: border-color 0.2s;
+}
+.sync-textarea:focus { border-color: var(--teal); }
