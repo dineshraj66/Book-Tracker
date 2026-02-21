@@ -621,7 +621,7 @@ input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.5); cur
     <section class="page" id="page-history">
       <header class="page-header">
         <div><p class="page-sub">Your wins</p><h1 class="page-title">Completed</h1></div>
-        <button class="import-btn" id="import-btn" onclick="openImportModal()" title="Import from JSON">⬆ Import</button>
+        <button class="import-btn" id="import-btn" title="Import from JSON">⬆ Import</button>
       </header>
       <div id="history-books-container">
         <div class="empty-state"><div class="empty-icon">🏆</div><p>No completed books yet.<br/>Keep reading!</p></div>
@@ -854,6 +854,7 @@ function initApp() {
   setupModals();
   setupGoal();
   setupCoverUpload();
+  setupImport();
   loadData();
 }
 
@@ -1341,6 +1342,133 @@ function showToast(msg) {
   t.classList.add('show');
   clearTimeout(_toastTimer);
   _toastTimer = setTimeout(()=>t.classList.remove('show'), 2800);
+}
+
+// ================================
+//  IMPORT FEATURE
+// ================================
+function setupImport() {
+  const importBtn   = document.getElementById('import-btn');
+  const overlay     = document.getElementById('import-modal-overlay');
+  const closeBtn    = document.getElementById('import-modal-close');
+  const dropArea    = document.getElementById('import-drop');
+  const fileInput   = document.getElementById('import-file');
+  const preview     = document.getElementById('import-preview');
+  const previewInfo = document.getElementById('import-preview-info');
+  const confirmBtn  = document.getElementById('import-confirm-btn');
+  const resultDiv   = document.getElementById('import-result');
+
+  if (!importBtn || !overlay) return;
+
+  let parsedBooks = null;
+
+  function openImport() {
+    overlay.classList.add('open');
+    parsedBooks = null;
+    preview.style.display   = 'none';
+    resultDiv.style.display = 'none';
+    dropArea.style.display  = 'flex';
+    fileInput.value = '';
+  }
+
+  importBtn.addEventListener('click', openImport);
+  window.openImportModal = openImport; // global fallback
+
+  closeBtn.addEventListener('click', () => overlay.classList.remove('open'));
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.classList.remove('open'); });
+
+  dropArea.addEventListener('click', () => fileInput.click());
+  dropArea.addEventListener('dragover', e => { e.preventDefault(); dropArea.classList.add('dragover'); });
+  dropArea.addEventListener('dragleave', () => dropArea.classList.remove('dragover'));
+  dropArea.addEventListener('drop', e => {
+    e.preventDefault();
+    dropArea.classList.remove('dragover');
+    if (e.dataTransfer.files[0]) readFile(e.dataTransfer.files[0]);
+  });
+  fileInput.addEventListener('change', () => {
+    if (fileInput.files[0]) readFile(fileInput.files[0]);
+  });
+
+  function readFile(file) {
+    const reader = new FileReader();
+    reader.onload = e => {
+      try {
+        const data = JSON.parse(e.target.result);
+        parsedBooks = Array.isArray(data) ? data : (data.books || []);
+        if (!parsedBooks.length) { showResult('❌ No books found in file.', false); return; }
+
+        const existingTitles = new Set(books.map(b => b.title.toLowerCase().trim()));
+        const newBooks  = parsedBooks.filter(b => !existingTitles.has((b.title||'').toLowerCase().trim()));
+        const dupes     = parsedBooks.length - newBooks.length;
+        const completed = parsedBooks.filter(b => b.status === 'completed').length;
+        const reading   = parsedBooks.filter(b => b.status === 'reading').length;
+
+        previewInfo.innerHTML = `
+          <div class="import-stat-row">
+            <div class="import-stat"><span class="import-stat-n">${parsedBooks.length}</span><span>Total</span></div>
+            <div class="import-stat"><span class="import-stat-n" style="color:var(--green)">${completed}</span><span>Completed</span></div>
+            <div class="import-stat"><span class="import-stat-n" style="color:var(--teal)">${reading}</span><span>Reading</span></div>
+            <div class="import-stat"><span class="import-stat-n" style="color:var(--coral)">${dupes}</span><span>Skipped</span></div>
+          </div>
+          ${dupes > 0 ? `<div style="font-size:0.75rem;color:var(--text3);margin-top:0.4rem">⚠️ ${dupes} duplicate(s) will be skipped</div>` : ''}`;
+
+        dropArea.style.display  = 'none';
+        preview.style.display   = 'block';
+        resultDiv.style.display = 'none';
+        confirmBtn.textContent  = `⬆ Import ${newBooks.length} Books`;
+        confirmBtn._newBooks    = newBooks;
+      } catch(err) {
+        showResult('❌ Invalid JSON: ' + err.message, false);
+      }
+    };
+    reader.readAsText(file);
+  }
+
+  confirmBtn.addEventListener('click', async () => {
+    const toImport = confirmBtn._newBooks;
+    if (!toImport || !toImport.length) { showResult('Nothing new to import.', false); return; }
+    confirmBtn.disabled = true;
+    confirmBtn.textContent = 'Importing…';
+    for (const b of toImport) {
+      const book = {
+        id:          b.id || ('imp_' + Date.now() + '_' + Math.random().toString(36).slice(2,5)),
+        title:       b.title || 'Untitled',
+        author:      b.author || 'Unknown',
+        category:    normCat(b.category),
+        totalPages:  parseInt(b.totalPages) || 200,
+        currentPage: b.status === 'completed' ? (parseInt(b.totalPages) || 200) : (parseInt(b.currentPage) || 0),
+        startDate:   b.startDate || null,
+        endDate:     b.endDate   || null,
+        status:      b.status === 'reading' ? 'reading' : 'completed',
+        pageLogs:    b.pageLogs  || [],
+        cover:       b.cover     || null,
+      };
+      books.push(book);
+      await saveBook(book);
+    }
+    showResult(`✅ Imported ${toImport.length} books successfully!`, true);
+    updateGoalCard();
+    confirmBtn.disabled = false;
+  });
+
+  function normCat(cat) {
+    if (!cat) return 'Self Development';
+    const c = cat.toLowerCase().trim();
+    const map = { 'self help':'Self Development','selfhelp':'Self Development','self development':'Self Development',
+      'finance':'Finance','trading':'Trading','biography':'Biography','relationship':'Relationship',
+      'mindset':'Mindset','health':'Health' };
+    return map[c] || 'Self Development';
+  }
+
+  function showResult(msg, success) {
+    preview.style.display   = 'none';
+    dropArea.style.display  = 'none';
+    resultDiv.style.display = 'block';
+    resultDiv.innerHTML = `<div style="font-size:1.5rem;margin-bottom:0.5rem">${success?'🎉':'⚠️'}</div>
+      <div style="font-size:0.95rem;font-weight:700;color:${success?'var(--green)':'var(--coral)'}">${msg}</div>
+      ${success?'<div style="font-size:0.78rem;color:var(--text3);margin-top:0.5rem">Check History to see all your books!</div>':''}`;
+    if (success) setTimeout(() => { overlay.classList.remove('open'); renderHistory(); }, 2000);
+  }
 }
 
 </script>
