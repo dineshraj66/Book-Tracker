@@ -69,6 +69,7 @@ function initApp() {
   setupModals();
   setupGoal();
   setupCoverUpload();
+  setupImport();
   loadData();
 }
 
@@ -562,6 +563,18 @@ function showToast(msg) {
 //  IMPORT FEATURE
 // ================================
 
+// Global function so onclick= in HTML always works
+window.openImportModal = function() {
+  const overlay = document.getElementById('import-modal-overlay');
+  if (!overlay) return;
+  overlay.classList.add('open');
+  // Reset state
+  document.getElementById('import-preview').style.display  = 'none';
+  document.getElementById('import-result').style.display   = 'none';
+  document.getElementById('import-drop').style.display     = 'flex';
+  document.getElementById('import-file').value = '';
+};
+
 function setupImport() {
   const importBtn     = document.getElementById('import-btn');
   const overlay       = document.getElementById('import-modal-overlay');
@@ -577,14 +590,7 @@ function setupImport() {
 
   let parsedBooks = null;
 
-  importBtn.addEventListener('click', () => {
-    overlay.classList.add('open');
-    parsedBooks = null;
-    preview.style.display = 'none';
-    resultDiv.style.display = 'none';
-    fileInput.value = '';
-    dropArea.style.display = 'flex';
-  });
+  importBtn.addEventListener('click', () => window.openImportModal());
 
   closeBtn.addEventListener('click', () => overlay.classList.remove('open'));
   overlay.addEventListener('click', e => { if (e.target === overlay) overlay.classList.remove('open'); });
@@ -706,9 +712,4 @@ function setupImport() {
   }
 }
 
-// Call setupImport when app inits
-const _origInitApp = initApp;
-// Patch: call setupImport after DOM ready
-document.addEventListener('DOMContentLoaded', () => {
-  setTimeout(setupImport, 500);
-});
+// setupImport is called directly inside initApp

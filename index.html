@@ -621,7 +621,7 @@ input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.5); cur
     <section class="page" id="page-history">
       <header class="page-header">
         <div><p class="page-sub">Your wins</p><h1 class="page-title">Completed</h1></div>
-        <button class="import-btn" id="import-btn" title="Import from Excel / JSON">⬆ Import</button>
+        <button class="import-btn" id="import-btn" onclick="openImportModal()" title="Import from JSON">⬆ Import</button>
       </header>
       <div id="history-books-container">
         <div class="empty-state"><div class="empty-icon">🏆</div><p>No completed books yet.<br/>Keep reading!</p></div>
