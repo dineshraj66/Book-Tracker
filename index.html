@@ -241,58 +241,94 @@
   </div>
 </div>
 
+<!-- PWA Diagnostic -->
+<div class="pwa-diag" id="pwa-diag">
+  <div class="pwa-diag-box">
+    <div class="pwa-diag-title">📱 PWA Install Check</div>
+    <div id="pwa-diag-list"></div>
+    <div class="pwa-diag-ios" id="pwa-diag-ios" style="display:none">
+      <strong>iOS Safari:</strong> Tap Share (□↑) → "Add to Home Screen"
+    </div>
+    <button class="pwa-diag-close" id="pwa-diag-close">Close</button>
+  </div>
+</div>
+
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
 <script src="app.js"></script>
 <script>
-  // ---- Service Worker ----
+(function () {
+  let deferredPrompt = null;
+  const banner = document.getElementById('install-banner');
+
+  // ── Register Service Worker ──
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
-      navigator.serviceWorker.register('./sw.js', { scope: './' })
-        .then(reg => {
-          console.log('✅ SW registered, scope:', reg.scope);
-        })
-        .catch(err => {
-          console.warn('❌ SW registration failed:', err);
-        });
+      navigator.serviceWorker.register('./sw.js')
+        .then(reg => console.log('[SW] ✅ Registered, scope:', reg.scope))
+        .catch(err => console.error('[SW] ❌ Failed:', err));
     });
   }
 
-  // ---- PWA Install Prompt ----
-  let deferredPrompt = null;
-  const banner = document.getElementById('install-banner');
-  const btnYes = document.getElementById('install-btn-yes');
-  const btnNo  = document.getElementById('install-btn-no');
-
-  // Chrome/Android: capture the beforeinstallprompt event
+  // ── Capture Chrome/Android install prompt ──
   window.addEventListener('beforeinstallprompt', e => {
+    console.log('[PWA] ✅ beforeinstallprompt fired');
     e.preventDefault();
     deferredPrompt = e;
-    // Show banner after a short delay
-    setTimeout(() => banner.classList.add('show'), 2500);
+    setTimeout(() => banner.classList.add('show'), 1200);
   });
 
-  btnYes.addEventListener('click', async () => {
+  document.getElementById('install-btn-yes').addEventListener('click', async () => {
     banner.classList.remove('show');
-    if (deferredPrompt) {
-      deferredPrompt.prompt();
-      const { outcome } = await deferredPrompt.userChoice;
-      console.log('Install outcome:', outcome);
-      deferredPrompt = null;
+    if (!deferredPrompt) {
+      alert('Use your browser menu → "Add to Home Screen" to install.');
+      return;
     }
-  });
-
-  btnNo.addEventListener('click', () => {
-    banner.classList.remove('show');
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    console.log('[PWA] User choice:', outcome);
     deferredPrompt = null;
   });
 
-  // Hide banner if already installed
+  document.getElementById('install-btn-no').addEventListener('click', () => {
+    banner.classList.remove('show');
+  });
+
   window.addEventListener('appinstalled', () => {
+    console.log('[PWA] ✅ App installed!');
     banner.classList.remove('show');
     deferredPrompt = null;
-    console.log('✅ App installed!');
   });
+
+  // ── Diagnostic tool — run checkPWA() in browser console ──
+  window.checkPWA = async function () {
+    const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone;
+    let swActive = false;
+    try { swActive = !!(await navigator.serviceWorker.getRegistration()); } catch(e) {}
+
+    const checks = [
+      { label: 'Served over HTTPS',        ok: location.protocol === 'https:' || location.hostname === 'localhost' },
+      { label: 'Service Worker supported', ok: 'serviceWorker' in navigator },
+      { label: 'Service Worker registered',ok: swActive },
+      { label: 'Manifest linked',          ok: !!document.querySelector('link[rel=manifest]') },
+      { label: 'Install prompt captured',  ok: !!deferredPrompt },
+      { label: 'Already installed',        ok: isStandalone },
+    ];
+
+    const diag = document.getElementById('pwa-diag');
+    document.getElementById('pwa-diag-list').innerHTML = checks.map(c =>
+      `<div class="pwa-check ${c.ok ? 'ok' : 'fail'}">${c.ok ? '✅' : '❌'} ${c.label}</div>`
+    ).join('');
+    document.getElementById('pwa-diag-ios').style.display = isIOS ? 'block' : 'none';
+    diag.classList.add('show');
+  };
+
+  document.getElementById('pwa-diag-close').addEventListener('click', () => {
+    document.getElementById('pwa-diag').classList.remove('show');
+  });
+
+})();
 </script>
 </body>
 </html>

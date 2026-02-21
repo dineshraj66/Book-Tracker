@@ -1,6 +1,8 @@
-// PageTurn Service Worker v3
-const CACHE = 'pageturn-v3';
-const PRECACHE = [
+// PageTurn SW v4
+const CACHE_NAME = 'pageturn-v4';
+
+// Use relative URLs — works regardless of GitHub Pages subdirectory
+const ASSETS = [
   'index.html',
   'style.css',
   'app.js',
@@ -11,45 +13,50 @@ const PRECACHE = [
   'icons/icon-512-maskable.png'
 ];
 
-self.addEventListener('install', e => {
-  e.waitUntil(
-    caches.open(CACHE)
-      .then(c => {
-        return Promise.allSettled(
-          PRECACHE.map(url => c.add(url).catch(err => console.warn('Cache miss:', url, err)))
-        );
-      })
-      .then(() => self.skipWaiting())
+self.addEventListener('install', event => {
+  self.skipWaiting();
+  event.waitUntil(
+    caches.open(CACHE_NAME).then(cache => {
+      // Cache each file individually so one failure doesn't break all
+      return Promise.allSettled(
+        ASSETS.map(asset =>
+          cache.add(new Request(asset, { cache: 'reload' }))
+            .catch(e => console.warn('[SW] Failed to cache:', asset, e))
+        )
+      );
+    })
   );
 });
 
-self.addEventListener('activate', e => {
-  e.waitUntil(
-    caches.keys()
-      .then(keys => Promise.all(
-        keys.filter(k => k !== CACHE).map(k => caches.delete(k))
-      ))
-      .then(() => self.clients.claim())
+self.addEventListener('activate', event => {
+  event.waitUntil(
+    caches.keys().then(keys =>
+      Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k)))
+    ).then(() => self.clients.claim())
   );
 });
 
-self.addEventListener('fetch', e => {
-  if (e.request.method !== 'GET') return;
+self.addEventListener('fetch', event => {
+  if (event.request.method !== 'GET') return;
 
-  // Skip cross-origin requests (Firebase, Google Fonts, etc.)
-  const url = new URL(e.request.url);
-  if (url.origin !== self.location.origin) return;
+  const url = new URL(event.request.url);
+  // Only handle same-origin requests
+  if (url.origin !== location.origin) return;
 
-  e.respondWith(
-    caches.open(CACHE).then(cache =>
-      cache.match(e.request).then(cached => {
-        const fetched = fetch(e.request).then(response => {
-          if (response && response.status === 200 && response.type !== 'opaque') {
-            cache.put(e.request, response.clone());
-          }
-          return response;
-        }).catch(() => cached);
-        return cached || fetched;
+  event.respondWith(
+    caches.open(CACHE_NAME).then(cache =>
+      cache.match(event.request).then(cached => {
+        // Network first for HTML, cache first for everything else
+        const isHTML = event.request.destination === 'document';
+        if (isHTML) {
+          return fetch(event.request)
+            .then(res => { cache.put(event.request, res.clone()); return res; })
+            .catch(() => cached || caches.match('index.html'));
+        }
+        return cached || fetch(event.request).then(res => {
+          if (res.status === 200) cache.put(event.request, res.clone());
+          return res;
+        });
       })
     )
   );

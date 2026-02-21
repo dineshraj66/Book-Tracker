@@ -491,3 +491,47 @@ input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.5); cur
     transform: translateY(0);
   }
 }
+
+/* ── PWA Diagnostic overlay ── */
+.pwa-diag {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.75);
+  backdrop-filter: blur(6px);
+  z-index: 500;
+  display: none; align-items: center; justify-content: center;
+  padding: 1.5rem;
+}
+.pwa-diag.show { display: flex; }
+.pwa-diag-box {
+  background: var(--surface2);
+  border: 1px solid rgba(56,189,248,0.25);
+  border-radius: var(--radius);
+  padding: 1.75rem;
+  width: 100%; max-width: 380px;
+  box-shadow: 0 24px 64px rgba(0,0,0,0.8);
+}
+.pwa-diag-title {
+  font-family: var(--font-h);
+  font-size: 1.2rem; font-weight: 700;
+  color: var(--text); margin-bottom: 1.25rem;
+}
+.pwa-check {
+  font-size: 0.85rem; font-weight: 600;
+  padding: 0.55rem 0.75rem;
+  border-radius: 9px; margin-bottom: 0.4rem;
+}
+.pwa-check.ok   { background: rgba(52,211,153,0.1); color: var(--green); }
+.pwa-check.fail { background: rgba(251,113,133,0.1); color: var(--coral); }
+.pwa-diag-ios {
+  font-size: 0.82rem; color: var(--text2);
+  background: var(--surface3); border-radius: 10px;
+  padding: 0.75rem; margin-top: 1rem; line-height: 1.6;
+}
+.pwa-diag-close {
+  margin-top: 1.25rem; width: 100%;
+  background: var(--surface3); border: 1px solid var(--border);
+  border-radius: 10px; color: var(--text2);
+  font-family: var(--font-b); font-size: 0.85rem; font-weight: 700;
+  padding: 0.6rem; cursor: pointer; transition: background 0.2s;
+}
+.pwa-diag-close:hover { background: var(--surface); }
