@@ -1,187 +1,215 @@
-// ===========================
-//  PAGETURN - Book Tracker
-//  app.js
-// ===========================
+// ================================
+//  PAGETURN v2 — app.js
+// ================================
 
-// ---- Firebase Configuration ----
-// IMPORTANT: Replace these values with your own Firebase project config
-// Get your config from: Firebase Console > Project Settings > Your Apps > SDK setup
+// ---- Firebase Config ----
+// Replace with your own Firebase project config
 const FIREBASE_CONFIG = {
-   apiKey: "AIzaSyD-2SCMUJsrkmmWo4IUmWpjPu5TC99C-ho",
-  authDomain: "book-tracker-5bc5f.firebaseapp.com",
-  projectId: "book-tracker-5bc5f",
-  storageBucket: "book-tracker-5bc5f.firebasestorage.app",
-  messagingSenderId: "689545850122",
-  appId: "1:689545850122:web:f0d244bcf9a4c9e2c51ef3"
+  apiKey: "YOUR_API_KEY",
+  authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+  projectId: "YOUR_PROJECT_ID",
+  storageBucket: "YOUR_PROJECT_ID.appspot.com",
+  messagingSenderId: "YOUR_SENDER_ID",
+  appId: "YOUR_APP_ID"
 };
 
-// ---- Initialize Firebase ----
+// ---- Firebase Init ----
 let db;
-let useLocalStorage = false;
+let useLocal = false;
 
 try {
   firebase.initializeApp(FIREBASE_CONFIG);
   db = firebase.firestore();
-  // Test connection
-  db.collection('_ping').limit(1).get().catch(() => {
-    console.warn('Firebase not configured – using local storage fallback');
-    useLocalStorage = true;
-    initApp();
-  });
-  db.collection('_ping').limit(1).get().then(() => {
-    initApp();
-  }).catch(() => {});
-} catch (e) {
-  console.warn('Firebase init failed – using local storage fallback');
-  useLocalStorage = true;
-  initApp();
+  db.collection('_ping').limit(1).get()
+    .then(() => initApp())
+    .catch(() => { useLocal = true; initApp(); });
+} catch(e) {
+  useLocal = true;
 }
 
-// ---- Local Storage Fallback ----
-const LOCAL_KEY = 'pageturn_data';
-
-function loadLocal() {
-  try {
-    return JSON.parse(localStorage.getItem(LOCAL_KEY)) || { books: [], goal: { year: new Date().getFullYear(), target: 20 } };
-  } catch { return { books: [], goal: { year: new Date().getFullYear(), target: 20 } }; }
-}
-
-function saveLocal(data) {
-  localStorage.setItem(LOCAL_KEY, JSON.stringify(data));
-}
-
-// ---- App State ----
-let books = [];     // { id, title, author, category, totalPages, currentPage, startDate, endDate, status: 'reading'|'completed', pageLogs: [{date, page}] }
-let goal = { year: new Date().getFullYear(), target: 20 };
-let currentFilter = 'all';
-
-// ---- DOM Ready ----
-function initApp() {
-  setGreeting();
-  setupNavigation();
-  setupModals();
-  setupGoalCard();
-  loadData();
-}
-
-// Fallback if firebase doesn't respond at all
+// Fallback timer — ensure app always starts
 window.addEventListener('DOMContentLoaded', () => {
   setTimeout(() => {
-    if (!document.getElementById('page-home').classList.contains('_loaded')) {
-      useLocalStorage = true;
-      initApp();
-    }
-  }, 2000);
+    if (!window._appInited) { useLocal = true; initApp(); }
+  }, 1800);
 });
+
+// ---- Local Storage ----
+const LS_KEY = 'pageturn_v2';
+function lsLoad() {
+  try { return JSON.parse(localStorage.getItem(LS_KEY)) || { books: [], goal: { year: new Date().getFullYear(), target: 20 } }; }
+  catch { return { books: [], goal: { year: new Date().getFullYear(), target: 20 } }; }
+}
+function lsSave(data) { localStorage.setItem(LS_KEY, JSON.stringify(data)); }
+
+// ---- State ----
+let books = [];
+let goal = { year: new Date().getFullYear(), target: 20 };
+let catFilter = 'all';
+let coverDataUrl = null; // temp for new book
+
+// ---- Category → color ----
+const CAT_COLORS = {
+  'Self Development': '#34d399',
+  'Biography':        '#a78bfa',
+  'Trading':          '#fbbf24',
+  'Relationship':     '#fb7185',
+  'Mindset':          '#38bdf8',
+  'Finance':          '#34d399',
+  'Health':           '#fb7185',
+};
+
+// ---- Init ----
+function initApp() {
+  if (window._appInited) return;
+  window._appInited = true;
+
+  setGreeting();
+  setupNav();
+  setupModals();
+  setupGoal();
+  setupCoverUpload();
+  loadData();
+}
 
 // ---- Greeting ----
 function setGreeting() {
   const h = new Date().getHours();
   const el = document.getElementById('greeting-time');
-  if (el) el.textContent = h < 12 ? 'morning' : h < 18 ? 'afternoon' : 'evening';
-  document.getElementById('goal-year').textContent = new Date().getFullYear();
-  document.getElementById('page-home').classList.add('_loaded');
+  if (el) el.textContent = h < 12 ? 'morning' : h < 17 ? 'afternoon' : 'evening';
+  const gy = document.getElementById('goal-year');
+  if (gy) gy.textContent = new Date().getFullYear();
 }
 
 // ---- Navigation ----
-function setupNavigation() {
-  const allLinks = document.querySelectorAll('[data-page]');
-  allLinks.forEach(link => {
-    link.addEventListener('click', e => {
+function setupNav() {
+  document.querySelectorAll('[data-page]').forEach(el => {
+    el.addEventListener('click', e => {
       e.preventDefault();
-      navigateTo(link.dataset.page);
+      goTo(el.dataset.page);
     });
   });
 }
 
-function navigateTo(page) {
+function goTo(page) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('[data-page]').forEach(l => l.classList.remove('active'));
   document.getElementById('page-' + page).classList.add('active');
-  document.querySelectorAll('[data-page="' + page + '"]').forEach(l => l.classList.add('active'));
-
-  if (page === 'home') renderHome();
+  document.querySelectorAll(`[data-page="${page}"]`).forEach(l => l.classList.add('active'));
+  if (page === 'home')    renderHome();
   if (page === 'library') renderLibrary();
   if (page === 'history') renderHistory();
-  if (page === 'stats') renderStats();
+  if (page === 'stats')   renderStats();
 }
 
-// ---- Data Loading ----
+// ---- Data ----
 async function loadData() {
-  if (useLocalStorage) {
-    const local = loadLocal();
-    books = local.books || [];
-    goal = local.goal || { year: new Date().getFullYear(), target: 20 };
+  if (useLocal) {
+    const d = lsLoad();
+    books = d.books || [];
+    goal  = d.goal  || { year: new Date().getFullYear(), target: 20 };
   } else {
     try {
-      const [booksSnap, goalSnap] = await Promise.all([
+      const [bs, gs] = await Promise.all([
         db.collection('books').get(),
         db.collection('settings').doc('goal').get()
       ]);
-      books = booksSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-      if (goalSnap.exists) goal = goalSnap.data();
-    } catch (e) {
-      console.error(e);
-      useLocalStorage = true;
-      const local = loadLocal();
-      books = local.books || [];
-      goal = local.goal || { year: new Date().getFullYear(), target: 20 };
+      books = bs.docs.map(d => ({ id: d.id, ...d.data() }));
+      if (gs.exists) goal = gs.data();
+    } catch(e) {
+      useLocal = true;
+      const d = lsLoad();
+      books = d.books || [];
+      goal  = d.goal  || { year: new Date().getFullYear(), target: 20 };
     }
   }
   renderHome();
 }
 
 async function saveBook(book) {
-  if (useLocalStorage) {
-    const local = loadLocal();
-    const idx = local.books.findIndex(b => b.id === book.id);
-    if (idx >= 0) local.books[idx] = book;
-    else local.books.push(book);
-    saveLocal(local);
+  if (useLocal) {
+    const d = lsLoad();
+    const i = d.books.findIndex(b => b.id === book.id);
+    if (i >= 0) d.books[i] = book; else d.books.push(book);
+    lsSave(d);
   } else {
     const { id, ...data } = book;
     await db.collection('books').doc(id).set(data);
   }
 }
 
-async function deleteBookDB(id) {
-  if (useLocalStorage) {
-    const local = loadLocal();
-    local.books = local.books.filter(b => b.id !== id);
-    saveLocal(local);
+async function deleteBookData(id) {
+  if (useLocal) {
+    const d = lsLoad();
+    d.books = d.books.filter(b => b.id !== id);
+    lsSave(d);
   } else {
     await db.collection('books').doc(id).delete();
   }
 }
 
-async function saveGoal() {
-  if (useLocalStorage) {
-    const local = loadLocal();
-    local.goal = goal;
-    saveLocal(local);
+async function saveGoalData() {
+  if (useLocal) {
+    const d = lsLoad(); d.goal = goal; lsSave(d);
   } else {
     await db.collection('settings').doc('goal').set(goal);
   }
 }
 
+// ---- Cover Upload ----
+function setupCoverUpload() {
+  const area = document.getElementById('cover-upload');
+  const fileInput = document.getElementById('cover-file');
+  const preview = document.getElementById('cover-preview');
+  const placeholder = document.getElementById('cover-placeholder');
+
+  area.addEventListener('click', () => fileInput.click());
+  fileInput.addEventListener('change', () => {
+    const file = fileInput.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = e => {
+      coverDataUrl = e.target.result;
+      preview.src = coverDataUrl;
+      preview.style.display = 'block';
+      placeholder.style.display = 'none';
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
 // ---- Modals ----
 function setupModals() {
+  // Add book modal
   const overlay = document.getElementById('modal-overlay');
-  const closeBtn = document.getElementById('modal-close');
-  const form = document.getElementById('add-book-form');
-
-  document.getElementById('fab-add').addEventListener('click', () => openModal());
-  document.getElementById('fab-add-lib').addEventListener('click', () => openModal());
-  closeBtn.addEventListener('click', closeModal);
+  document.getElementById('modal-close').addEventListener('click', closeModal);
   overlay.addEventListener('click', e => { if (e.target === overlay) closeModal(); });
-
-  form.addEventListener('submit', async e => {
+  document.getElementById('add-book-form').addEventListener('submit', async e => {
     e.preventDefault();
     await addBook();
     closeModal();
   });
 
-  // Set today as default start date
+  // FAB buttons
+  document.getElementById('fab-main').addEventListener('click', openModal);
+  document.getElementById('fab-desktop').addEventListener('click', openModal);
+
+  // Goal modal
+  const gOverlay = document.getElementById('goal-modal-overlay');
+  document.getElementById('goal-modal-close').addEventListener('click', closeGoalModal);
+  gOverlay.addEventListener('click', e => { if (e.target === gOverlay) closeGoalModal(); });
+  document.getElementById('goal-form').addEventListener('submit', async e => {
+    e.preventDefault();
+    const yr  = parseInt(document.getElementById('goal-year-input').value);
+    const tgt = parseInt(document.getElementById('goal-target-input').value);
+    if (yr && tgt) {
+      goal = { year: yr, target: tgt };
+      await saveGoalData();
+      updateGoalCard();
+      closeGoalModal();
+    }
+  });
+
   document.getElementById('book-start-date').value = todayStr();
 }
 
@@ -189,69 +217,57 @@ function openModal() {
   document.getElementById('modal-overlay').classList.add('open');
   document.getElementById('book-title').focus();
 }
-
 function closeModal() {
   document.getElementById('modal-overlay').classList.remove('open');
   document.getElementById('add-book-form').reset();
   document.getElementById('book-start-date').value = todayStr();
+  // Reset cover
+  coverDataUrl = null;
+  const preview = document.getElementById('cover-preview');
+  const placeholder = document.getElementById('cover-placeholder');
+  preview.style.display = 'none';
+  preview.src = '';
+  placeholder.style.display = 'flex';
+  document.getElementById('cover-file').value = '';
 }
 
-// ---- Goal Card ----
-function setupGoalCard() {
+// ---- Goal ----
+function setupGoal() {
   document.getElementById('goal-edit-btn').addEventListener('click', openGoalModal);
-  document.getElementById('goal-modal-close').addEventListener('click', closeGoalModal);
-  document.getElementById('goal-modal-overlay').addEventListener('click', e => {
-    if (e.target === document.getElementById('goal-modal-overlay')) closeGoalModal();
-  });
-  document.getElementById('goal-form').addEventListener('submit', async e => {
-    e.preventDefault();
-    const yr = parseInt(document.getElementById('goal-year-input').value);
-    const tgt = parseInt(document.getElementById('goal-target-input').value);
-    if (yr && tgt) {
-      goal = { year: yr, target: tgt };
-      await saveGoal();
-      updateGoalCard();
-      closeGoalModal();
-    }
-  });
 }
-
 function openGoalModal() {
   document.getElementById('goal-year-input').value = goal.year;
   document.getElementById('goal-target-input').value = goal.target;
   document.getElementById('goal-modal-overlay').classList.add('open');
 }
-
 function closeGoalModal() {
   document.getElementById('goal-modal-overlay').classList.remove('open');
 }
-
 function updateGoalCard() {
-  const completed = books.filter(b => b.status === 'completed' && new Date(b.endDate).getFullYear() === goal.year).length;
-  const pct = goal.target > 0 ? Math.min(100, (completed / goal.target) * 100) : 0;
-
-  document.getElementById('goal-year').textContent = goal.year;
-  document.getElementById('goal-completed').textContent = String(completed).padStart(2, '0');
-  document.getElementById('goal-total').textContent = goal.target;
+  const done = books.filter(b => b.status === 'completed' && new Date(b.endDate || '').getFullYear() === goal.year).length;
+  const pct  = goal.target > 0 ? Math.min(100, (done / goal.target) * 100) : 0;
+  document.getElementById('goal-year').textContent      = goal.year;
+  document.getElementById('goal-completed').textContent = String(done).padStart(2, '0');
+  document.getElementById('goal-total').textContent     = goal.target;
   document.getElementById('goal-progress-fill').style.width = pct + '%';
 }
 
 // ---- Add Book ----
 async function addBook() {
-  const title = document.getElementById('book-title').value.trim();
-  const author = document.getElementById('book-author').value.trim();
-  const category = document.getElementById('book-category').value;
-  const totalPages = parseInt(document.getElementById('book-pages').value);
+  const title     = document.getElementById('book-title').value.trim();
+  const author    = document.getElementById('book-author').value.trim();
+  const category  = document.getElementById('book-category').value;
+  const totalPages= parseInt(document.getElementById('book-pages').value);
   const startDate = document.getElementById('book-start-date').value || todayStr();
 
   const book = {
-    id: 'book_' + Date.now(),
+    id: 'bk_' + Date.now(),
     title, author, category, totalPages,
     currentPage: 0,
-    startDate,
-    endDate: null,
+    startDate, endDate: null,
     status: 'reading',
-    pageLogs: []
+    pageLogs: [],
+    cover: coverDataUrl || null
   };
 
   books.push(book);
@@ -264,129 +280,156 @@ async function addBook() {
 async function updatePage(bookId, newPage) {
   const book = books.find(b => b.id === bookId);
   if (!book) return;
-
   newPage = Math.max(0, Math.min(newPage, book.totalPages));
   book.currentPage = newPage;
-
-  // Log today's reading
   const today = todayStr();
-  const existing = book.pageLogs.find(l => l.date === today);
-  if (existing) existing.page = newPage;
-  else book.pageLogs.push({ date: today, page: newPage });
-
+  const log = book.pageLogs.find(l => l.date === today);
+  if (log) log.page = newPage; else book.pageLogs.push({ date: today, page: newPage });
   await saveBook(book);
   renderHome();
+  showToast('✅ Progress updated!');
 }
 
-// ---- Complete Book ----
-async function completeBook(bookId) {
-  const book = books.find(b => b.id === bookId);
-  if (!book) return;
+window.handlePageUpdate = function(id) {
+  const inp = document.getElementById('pi-' + id);
+  if (!inp) return;
+  const v = parseInt(inp.value);
+  if (!isNaN(v)) updatePage(id, v);
+};
 
+// ---- Complete ----
+window.completeBook = async function(id) {
+  const book = books.find(b => b.id === id);
+  if (!book) return;
   book.status = 'completed';
   book.currentPage = book.totalPages;
   book.endDate = todayStr();
-
   await saveBook(book);
   updateGoalCard();
   renderHome();
-  showToast('🏆 Book completed! Great job!');
-}
+  showToast('🏆 Book completed! Amazing!');
+};
 
-// ---- Delete Book ----
-async function deleteBook(bookId) {
-  if (!confirm('Remove this book?')) return;
-  books = books.filter(b => b.id !== bookId);
-  await deleteBookDB(bookId);
+// ---- Delete ----
+window.deleteBook = async function(id) {
+  if (!confirm('Remove this book from your library?')) return;
+  books = books.filter(b => b.id !== id);
+  await deleteBookData(id);
   renderLibrary();
   showToast('Book removed.');
+};
+
+// ---- Circular Progress SVG ----
+function circleProgressSVG(pct, color) {
+  const r = 26;
+  const circ = 2 * Math.PI * r;
+  const dash = circ - (pct / 100) * circ;
+  return `
+  <svg width="64" height="64" viewBox="0 0 64 64">
+    <circle class="circle-bg" cx="32" cy="32" r="${r}" />
+    <circle class="circle-fill"
+      cx="32" cy="32" r="${r}"
+      stroke="${color}"
+      stroke-dasharray="${circ}"
+      stroke-dashoffset="${dash}"
+    />
+  </svg>`;
+}
+
+// ---- Cover HTML ----
+function coverThumb(book, cls, placeholderClass) {
+  if (book.cover) {
+    return `<img src="${book.cover}" class="${cls}" alt="Cover" />`;
+  }
+  const emoji = { 'Self Development':'🌱','Biography':'👤','Trading':'📈','Relationship':'❤️','Mindset':'🧠','Finance':'💰','Health':'💪' };
+  return `<div class="${placeholderClass}">${emoji[book.category] || '📗'}</div>`;
 }
 
 // ---- Render Home ----
 function renderHome() {
   updateGoalCard();
-
-  const container = document.getElementById('current-books-container');
   const reading = books.filter(b => b.status === 'reading');
+  const container = document.getElementById('current-books-container');
 
-  if (reading.length === 0) {
-    container.innerHTML = `<div class="empty-state" id="no-current-books">
-      <div class="empty-icon">📭</div>
-      <p>No books in progress.<br/>Add your first book!</p>
-    </div>`;
+  if (!reading.length) {
+    container.innerHTML = `<div class="empty-state"><div class="empty-icon">📭</div><p>No books in progress.<br/>Tap + to add one!</p></div>`;
     return;
   }
 
   container.innerHTML = reading.map(book => {
-    const pct = book.totalPages > 0 ? Math.round((book.currentPage / book.totalPages) * 100) : 0;
+    const pct   = book.totalPages > 0 ? Math.round((book.currentPage / book.totalPages) * 100) : 0;
+    const color = CAT_COLORS[book.category] || '#38bdf8';
+    const catClass = 'cat-' + (book.category || '').replace(/ /g, '\\ ');
+
     return `
-    <div class="current-book-card">
-      <div class="book-category-badge">${esc(book.category)}</div>
-      <div class="book-title">${esc(book.title)}</div>
-      <div class="book-author">by ${esc(book.author)}</div>
-      <div class="progress-section">
+    <div class="book-card">
+      ${coverThumb(book, 'book-cover-thumb', 'book-cover-placeholder')}
+      <div class="book-card-body">
+        <div class="cat-badge ${catClass}">${esc(book.category)}</div>
+        <div class="book-title-text">${esc(book.title)}</div>
+        <div class="book-author-text">by ${esc(book.author)}</div>
         <div class="progress-row">
-          <span class="progress-label">Progress</span>
-          <span class="progress-pct">${pct}%</span>
-        </div>
-        <div class="progress-track">
-          <div class="progress-fill" style="width:${pct}%"></div>
-        </div>
-        <div class="page-update-row">
-          <input type="number" class="page-input" id="page-input-${book.id}"
-            value="${book.currentPage}" min="0" max="${book.totalPages}"
-            placeholder="Page #"
-          />
-          <span class="page-total">/ ${book.totalPages}</span>
-          <button class="update-btn" onclick="handlePageUpdate('${book.id}')">Update</button>
+          <div class="circle-progress-wrap">
+            ${circleProgressSVG(pct, color)}
+            <div class="circle-pct-label">${pct}%</div>
+          </div>
+          <div class="page-update-col">
+            <div class="page-update-row">
+              <input type="number" class="page-input" id="pi-${book.id}"
+                value="${book.currentPage}" min="0" max="${book.totalPages}" />
+              <span class="page-of">/ ${book.totalPages}</span>
+              <button class="update-btn" onclick="handlePageUpdate('${book.id}')">Update</button>
+            </div>
+            <button class="complete-btn" onclick="completeBook('${book.id}')">✓ Mark Complete</button>
+          </div>
         </div>
       </div>
-      <button class="complete-btn" onclick="completeBook('${book.id}')">✓ Mark as Completed</button>
     </div>`;
   }).join('');
-}
 
-function handlePageUpdate(bookId) {
-  const input = document.getElementById('page-input-' + bookId);
-  if (!input) return;
-  const val = parseInt(input.value);
-  if (!isNaN(val)) updatePage(bookId, val);
+  // Enter key on page inputs
+  container.querySelectorAll('.page-input').forEach(inp => {
+    inp.addEventListener('keydown', e => {
+      if (e.key === 'Enter') handlePageUpdate(inp.id.replace('pi-', ''));
+    });
+  });
 }
 
 // ---- Render Library ----
 function renderLibrary() {
   const container = document.getElementById('library-books-container');
-  let filtered = books.filter(b => b.status === 'reading');
-  if (currentFilter !== 'all') filtered = filtered.filter(b => b.category === currentFilter);
+  let list = books.filter(b => b.status === 'reading');
+  if (catFilter !== 'all') list = list.filter(b => b.category === catFilter);
 
-  // Filter buttons
   document.querySelectorAll('.filter-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
+    btn.onclick = () => {
       document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
-      currentFilter = btn.dataset.cat;
+      catFilter = btn.dataset.cat;
       renderLibrary();
-    });
+    };
   });
 
-  if (filtered.length === 0) {
+  if (!list.length) {
     container.innerHTML = `<div class="empty-state"><div class="empty-icon">📚</div><p>No books here yet.</p></div>`;
     return;
   }
 
-  container.innerHTML = filtered.map(book => {
+  container.innerHTML = list.map(book => {
     const pct = book.totalPages > 0 ? Math.round((book.currentPage / book.totalPages) * 100) : 0;
-    return `<div class="library-card">
-      <div class="lib-book-info">
-        <div class="lib-book-title">${esc(book.title)}</div>
-        <div class="lib-book-author">${esc(book.author)}</div>
-        <div class="book-category-badge" style="margin-top:0.3rem">${esc(book.category)}</div>
+    const color = CAT_COLORS[book.category] || '#38bdf8';
+    return `
+    <div class="lib-card">
+      ${coverThumb(book, 'lib-cover', 'lib-cover-placeholder')}
+      <div class="lib-info">
+        <div class="lib-title">${esc(book.title)}</div>
+        <div class="lib-author">${esc(book.author)}</div>
+        <div class="lib-mini-progress">
+          <div class="lib-mini-track"><div class="lib-mini-fill" style="width:${pct}%;background:${color}"></div></div>
+          <span class="lib-mini-pct" style="color:${color}">${pct}%</span>
+        </div>
       </div>
-      <div class="lib-progress-mini">
-        <div class="lib-pct">${pct}%</div>
-        <div class="lib-track"><div class="lib-fill" style="width:${pct}%"></div></div>
-      </div>
-      <button class="lib-delete-btn" onclick="deleteBook('${book.id}')" title="Remove">🗑</button>
+      <button class="lib-del-btn" onclick="deleteBook('${book.id}')" title="Remove">🗑</button>
     </div>`;
   }).join('');
 }
@@ -394,28 +437,29 @@ function renderLibrary() {
 // ---- Render History ----
 function renderHistory() {
   const container = document.getElementById('history-books-container');
-  const completed = books.filter(b => b.status === 'completed')
+  const done = books.filter(b => b.status === 'completed')
     .sort((a, b) => (b.endDate || '').localeCompare(a.endDate || ''));
 
-  if (completed.length === 0) {
+  if (!done.length) {
     container.innerHTML = `<div class="empty-state"><div class="empty-icon">🏆</div><p>No completed books yet.<br/>Keep reading!</p></div>`;
     return;
   }
 
   const medals = ['🥇','🥈','🥉'];
-  container.innerHTML = completed.map((book, i) => {
+  container.innerHTML = done.map((book, i) => {
     const days = daysBetween(book.startDate, book.endDate);
-    const endFmt = book.endDate ? new Date(book.endDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—';
-    return `<div class="history-card">
-      <div class="history-medal">${medals[i] || '📗'}</div>
-      <div class="history-info">
-        <div class="history-title">${esc(book.title)}</div>
-        <div class="history-author">by ${esc(book.author)}</div>
-        <div class="history-meta">${esc(book.category)} · Finished ${endFmt}</div>
+    const dateFmt = book.endDate ? new Date(book.endDate).toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' }) : '—';
+    return `
+    <div class="history-card">
+      ${coverThumb(book, 'hist-cover', 'hist-cover-placeholder')}
+      <div class="hist-info">
+        <div class="hist-title">${medals[i] || '📗'} ${esc(book.title)}</div>
+        <div class="hist-author">by ${esc(book.author)}</div>
+        <div class="hist-meta">${esc(book.category)} · Finished ${dateFmt}</div>
       </div>
-      <div class="history-days">
-        <div class="history-days-num">${days}</div>
-        <div class="history-days-label">days</div>
+      <div class="hist-days">
+        <div class="hist-days-num">${days}</div>
+        <div class="hist-days-lbl">days</div>
       </div>
     </div>`;
   }).join('');
@@ -423,129 +467,93 @@ function renderHistory() {
 
 // ---- Render Stats ----
 function renderStats() {
-  const completed = books.filter(b => b.status === 'completed');
+  const done    = books.filter(b => b.status === 'completed');
   const reading = books.filter(b => b.status === 'reading');
 
-  document.getElementById('stat-total').textContent = completed.length;
+  document.getElementById('stat-total').textContent   = done.length;
   document.getElementById('stat-pending').textContent = reading.length;
 
-  if (completed.length > 0) {
-    const daysList = completed.map(b => daysBetween(b.startDate, b.endDate));
-    const avg = Math.round(daysList.reduce((a, b) => a + b, 0) / daysList.length);
-    document.getElementById('stat-avg-days').textContent = avg;
-    document.getElementById('stat-longest').textContent = Math.max(...daysList);
+  if (done.length) {
+    const daysList = done.map(b => daysBetween(b.startDate, b.endDate));
+    document.getElementById('stat-avg-days').textContent = Math.round(daysList.reduce((a,b)=>a+b,0)/daysList.length);
+    document.getElementById('stat-longest').textContent  = Math.max(...daysList);
     document.getElementById('stat-shortest').textContent = Math.min(...daysList);
-
-    // Avg pages per day
-    const totalPages = completed.reduce((s, b) => s + (b.totalPages || 0), 0);
-    const totalDays = daysList.reduce((a, b) => a + b, 0) || 1;
-    document.getElementById('stat-avg-pages').textContent = Math.round(totalPages / totalDays);
+    const totalPg = done.reduce((s,b)=>s+(b.totalPages||0),0);
+    const totalDy = daysList.reduce((a,b)=>a+b,0)||1;
+    document.getElementById('stat-avg-pages').textContent = Math.round(totalPg/totalDy);
   } else {
     ['stat-avg-days','stat-longest','stat-shortest','stat-avg-pages'].forEach(id => {
       document.getElementById(id).textContent = '—';
     });
   }
 
-  // Streaks from pageLogs
   const streaks = calcStreaks();
-  document.getElementById('stat-longest-streak').textContent = streaks.longest > 0 ? streaks.longest + 'd' : '—';
-  document.getElementById('stat-shortest-streak').textContent = streaks.current > 0 ? streaks.current + 'd' : '—';
+  document.getElementById('stat-longest-streak').textContent  = streaks.longest  > 0 ? streaks.longest  + 'd' : '—';
+  document.getElementById('stat-shortest-streak').textContent = streaks.current  > 0 ? streaks.current  + 'd' : '—';
 
-  // Monthly chart
-  renderMonthlyChart(completed);
+  renderChart(done);
 }
 
 function calcStreaks() {
-  const allDates = new Set();
-  books.forEach(b => (b.pageLogs || []).forEach(l => allDates.add(l.date)));
-  const sorted = [...allDates].sort();
-  if (sorted.length === 0) return { longest: 0, current: 0 };
-
-  let longest = 1, current = 1;
-  for (let i = 1; i < sorted.length; i++) {
+  const dates = new Set();
+  books.forEach(b => (b.pageLogs||[]).forEach(l => dates.add(l.date)));
+  const sorted = [...dates].sort();
+  if (!sorted.length) return { longest:0, current:0 };
+  let longest=1, cur=1;
+  for (let i=1; i<sorted.length; i++) {
     const diff = (new Date(sorted[i]) - new Date(sorted[i-1])) / 86400000;
-    if (diff === 1) { current++; longest = Math.max(longest, current); }
-    else current = 1;
+    if (diff === 1) { cur++; longest = Math.max(longest, cur); } else cur = 1;
   }
-
-  // Check if streak is ongoing (last log was today or yesterday)
-  const lastDate = new Date(sorted[sorted.length - 1]);
-  const today = new Date(todayStr());
-  const diffFromToday = (today - lastDate) / 86400000;
-  const currentStreak = diffFromToday <= 1 ? current : 0;
-
-  return { longest, current: currentStreak };
+  const last = new Date(sorted[sorted.length-1]);
+  const diffToday = (new Date(todayStr()) - last) / 86400000;
+  return { longest, current: diffToday <= 1 ? cur : 0 };
 }
 
-function renderMonthlyChart(completed) {
+function renderChart(done) {
   const container = document.getElementById('monthly-chart');
   const months = {};
-
-  completed.forEach(b => {
+  done.forEach(b => {
     if (!b.endDate) return;
     const d = new Date(b.endDate);
-    const key = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
-    months[key] = (months[key] || 0) + 1;
+    const key = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0');
+    months[key] = (months[key]||0) + 1;
   });
-
   const keys = Object.keys(months).sort().slice(-12);
-  if (keys.length === 0) {
-    container.innerHTML = '<div style="color:var(--text3);text-align:center;padding:2rem 0;font-size:0.85rem;">No completed books yet</div>';
+  if (!keys.length) {
+    container.innerHTML = '<div style="color:var(--text3);text-align:center;padding:2rem;font-size:0.85rem;">No data yet</div>';
     return;
   }
-
-  const maxVal = Math.max(...keys.map(k => months[k]), 1);
-  const CHART_H = 120;
-
-  const bars = keys.map(key => {
-    const val = months[key];
-    const h = Math.round((val / maxVal) * CHART_H);
-    const [yr, mo] = key.split('-');
-    const label = new Date(parseInt(yr), parseInt(mo) - 1).toLocaleString('en', { month: 'short' });
-    return `<div class="chart-bar-col">
-      <div class="chart-val-label">${val}</div>
-      <div class="chart-bar" style="height:${h}px" data-val="${val}"></div>
-      <div class="chart-month-label">${label}</div>
+  const maxV = Math.max(...keys.map(k=>months[k]), 1);
+  const H = 110;
+  container.innerHTML = `<div class="chart-bars">${keys.map(key => {
+    const v = months[key];
+    const h = Math.round((v/maxV)*H);
+    const [yr,mo] = key.split('-');
+    const lbl = new Date(+yr, +mo-1).toLocaleString('en',{month:'short'});
+    return `<div class="chart-col">
+      <div class="chart-val">${v}</div>
+      <div class="chart-bar" style="height:${h}px" data-val="${v}"></div>
+      <div class="chart-month">${lbl}</div>
     </div>`;
-  }).join('');
-
-  container.innerHTML = `<div class="chart-bars">${bars}</div>`;
+  }).join('')}</div>`;
 }
 
-// ---- Utilities ----
-function todayStr() {
-  return new Date().toISOString().split('T')[0];
+// ---- Utils ----
+function todayStr() { return new Date().toISOString().split('T')[0]; }
+function daysBetween(a,b) {
+  if (!a||!b) return 0;
+  return Math.max(1, Math.round((new Date(b)-new Date(a))/86400000));
+}
+function esc(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
-function daysBetween(start, end) {
-  if (!start || !end) return 0;
-  const diff = new Date(end) - new Date(start);
-  return Math.max(1, Math.round(diff / 86400000));
-}
-
-function esc(str) {
-  return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
-
-let toastTimer;
+let _toastTimer;
 function showToast(msg) {
-  let toast = document.getElementById('app-toast');
-  if (!toast) {
-    toast = document.createElement('div');
-    toast.id = 'app-toast';
-    toast.className = 'toast';
-    document.body.appendChild(toast);
-  }
-  toast.textContent = msg;
-  toast.classList.add('show');
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => toast.classList.remove('show'), 2800);
+  let t = document.getElementById('_toast');
+  if (!t) { t = document.createElement('div'); t.id='_toast'; t.className='toast'; document.body.appendChild(t); }
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(()=>t.classList.remove('show'), 2800);
 }
-
-// Also handle Enter key on page inputs
-document.addEventListener('keydown', e => {
-  if (e.key === 'Enter' && e.target.classList.contains('page-input')) {
-    const id = e.target.id.replace('page-input-', '');
-    handlePageUpdate(id);
-  }
-});
