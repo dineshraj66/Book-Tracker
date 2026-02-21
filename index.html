@@ -155,18 +155,25 @@ body { font-family: var(--font-b); background: var(--bg); color: var(--text); mi
 
 /* Book Cover Thumbnail */
 .book-cover-thumb {
-  width: 72px; height: 100px;
+  width: 80px; height: 115px;
   border-radius: 8px; flex-shrink: 0;
   object-fit: cover;
-  box-shadow: 4px 4px 16px rgba(0,0,0,0.5);
+  box-shadow: 4px 8px 20px rgba(0,0,0,0.6);
+  transition: opacity 0.3s ease, transform 0.2s ease;
 }
+.book-cover-thumb:hover { transform: scale(1.04); }
 .book-cover-placeholder {
-  width: 72px; height: 100px;
+  width: 80px; height: 115px;
   border-radius: 8px; flex-shrink: 0;
   display: flex; align-items: center; justify-content: center;
   font-size: 2rem;
   background: linear-gradient(135deg, var(--surface3), var(--surface2));
   border: 1px solid var(--border);
+  animation: shimmer 1.8s infinite;
+}
+@keyframes shimmer {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
 }
 
 .book-card-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0.5rem; }
@@ -234,8 +241,9 @@ body { font-family: var(--font-b); background: var(--bg); color: var(--text); mi
   transition: border-color 0.2s, transform 0.15s;
 }
 .lib-card:hover { border-color: rgba(56,189,248,0.2); transform: translateX(3px); }
-.lib-cover { width: 44px; height: 60px; border-radius: 6px; object-fit: cover; flex-shrink: 0; box-shadow: 2px 2px 8px rgba(0,0,0,0.4); }
-.lib-cover-placeholder { width: 44px; height: 60px; border-radius: 6px; background: var(--surface3); display: flex; align-items: center; justify-content: center; font-size: 1.2rem; flex-shrink: 0; }
+.lib-cover { width: 52px; height: 72px; border-radius: 7px; object-fit: cover; flex-shrink: 0; box-shadow: 3px 4px 12px rgba(0,0,0,0.5); transition: transform 0.2s; }
+.lib-cover:hover { transform: scale(1.05); }
+.lib-cover-placeholder { width: 52px; height: 72px; border-radius: 7px; background: linear-gradient(135deg, var(--surface3), var(--surface2)); display: flex; align-items: center; justify-content: center; font-size: 1.4rem; flex-shrink: 0; border: 1px solid var(--border); animation: shimmer 1.8s infinite; }
 .lib-info { flex: 1; min-width: 0; }
 .lib-title { font-family: var(--font-h); font-size: 0.95rem; font-weight: 700; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .lib-author { font-size: 0.75rem; color: var(--text2); margin-bottom: 0.3rem; }
@@ -263,8 +271,9 @@ body { font-family: var(--font-b); background: var(--bg); color: var(--text); mi
   margin-bottom: 0.75rem;
   display: flex; align-items: center; gap: 1rem;
 }
-.hist-cover { width: 50px; height: 68px; border-radius: 7px; object-fit: cover; flex-shrink: 0; box-shadow: 3px 3px 10px rgba(0,0,0,0.5); }
-.hist-cover-placeholder { width: 50px; height: 68px; border-radius: 7px; background: var(--surface3); display: flex; align-items: center; justify-content: center; font-size: 1.5rem; flex-shrink: 0; }
+.hist-cover { width: 58px; height: 80px; border-radius: 8px; object-fit: cover; flex-shrink: 0; box-shadow: 4px 6px 16px rgba(0,0,0,0.6); transition: transform 0.2s; }
+.hist-cover:hover { transform: scale(1.04); }
+.hist-cover-placeholder { width: 58px; height: 80px; border-radius: 8px; background: linear-gradient(135deg, var(--surface3), var(--surface2)); display: flex; align-items: center; justify-content: center; font-size: 1.6rem; flex-shrink: 0; border: 1px solid var(--border); animation: shimmer 1.8s infinite; }
 .hist-info { flex: 1; min-width: 0; }
 .hist-title { font-family: var(--font-h); font-size: 1rem; font-weight: 700; color: var(--text); }
 .hist-author { font-size: 0.78rem; color: var(--text2); margin-bottom: 0.2rem; }
@@ -1290,12 +1299,79 @@ function circleProgressSVG(pct, color) {
 }
 
 // ---- Cover HTML ----
-function coverThumb(book, cls, placeholderClass) {
-  if (book.cover) {
-    return `<img src="${book.cover}" class="${cls}" alt="Cover" />`;
+// ---- Cover cache (in-memory for session) ----
+const coverCache = {};
+
+async function fetchCoverURL(book) {
+  if (book.cover) return book.cover;
+  const cacheKey = book.id;
+  if (coverCache[cacheKey] !== undefined) return coverCache[cacheKey];
+
+  // Check localStorage cover cache first
+  try {
+    const stored = JSON.parse(localStorage.getItem('pageturn_covers') || '{}');
+    if (stored[book.id]) {
+      coverCache[cacheKey] = stored[book.id];
+      return stored[book.id];
+    }
+  } catch(e) {}
+
+  // Fetch from Google Books API
+  try {
+    const q = encodeURIComponent(`${book.title} ${book.author}`);
+    const res = await fetch(`https://www.googleapis.com/books/v1/volumes?q=${q}&maxResults=1&fields=items(volumeInfo(imageLinks))`);
+    const data = await res.json();
+    const img = data?.items?.[0]?.volumeInfo?.imageLinks;
+    // Prefer high-res, fall back to thumbnail
+    const url = (img?.extraLarge || img?.large || img?.medium || img?.thumbnail || '').replace('http:', 'https:');
+    coverCache[cacheKey] = url || null;
+    // Cache to localStorage
+    if (url) {
+      try {
+        const stored = JSON.parse(localStorage.getItem('pageturn_covers') || '{}');
+        stored[book.id] = url;
+        localStorage.setItem('pageturn_covers', JSON.stringify(stored));
+      } catch(e) {}
+    }
+    return url || null;
+  } catch(e) {
+    coverCache[cacheKey] = null;
+    return null;
   }
+}
+
+function coverThumb(book, cls, placeholderClass) {
   const emoji = { 'Self Development':'🌱','Biography':'👤','Trading':'📈','Relationship':'❤️','Mindset':'🧠','Finance':'💰','Health':'💪' };
-  return `<div class="${placeholderClass}">${emoji[book.category] || '📗'}</div>`;
+  // Use cached cover URL if available (sync check)
+  const cached = coverCache[book.id] || book.cover ||
+    (() => { try { return JSON.parse(localStorage.getItem('pageturn_covers') || '{}')[book.id]; } catch(e) { return null; } })();
+
+  if (cached) {
+    return `<img src="${cached}" class="${cls}" alt="${esc(book.title)}" onerror="this.style.display='none';this.nextSibling.style.display='flex'" loading="lazy" />
+            <div class="${placeholderClass}" style="display:none">${emoji[book.category] || '📗'}</div>`;
+  }
+  // Return placeholder first, then async-load cover and swap
+  const uid = 'cv_' + book.id.replace(/[^a-z0-9]/gi, '_');
+  // Trigger async fetch after render
+  setTimeout(() => fetchAndSwapCover(book, uid, cls, placeholderClass), 0);
+  return `<div class="${placeholderClass}" id="${uid}">${emoji[book.category] || '📗'}</div>`;
+}
+
+async function fetchAndSwapCover(book, uid, cls, placeholderClass) {
+  const url = await fetchCoverURL(book);
+  if (!url) return;
+  const el = document.getElementById(uid);
+  if (!el) return; // element no longer in DOM
+  const img = document.createElement('img');
+  img.src = url;
+  img.className = cls;
+  img.alt = book.title;
+  img.loading = 'lazy';
+  img.style.opacity = '0';
+  img.style.transition = 'opacity 0.3s ease';
+  img.onerror = () => img.remove();
+  img.onload = () => { img.style.opacity = '1'; };
+  el.parentNode.replaceChild(img, el);
 }
 
 // ---- Render Home ----
