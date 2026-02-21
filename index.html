@@ -146,16 +146,21 @@ body { font-family: var(--font-b); background: var(--bg); color: var(--text); mi
   background: var(--surface2);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 1.25rem;
+  padding: 1.1rem;
   margin-bottom: 1rem;
-  display: flex; gap: 1.1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
   transition: border-color 0.2s, transform 0.2s;
 }
 .book-card:hover { border-color: rgba(56,189,248,0.25); transform: translateY(-2px); }
 
+/* Top row: cover + info side by side */
+.book-card-top { display: flex; gap: 1rem; align-items: flex-start; margin-bottom: 1rem; }
+
 /* Book Cover Thumbnail */
 .book-cover-thumb {
-  width: 80px; height: 115px;
+  width: 72px; height: 105px;
   border-radius: 8px; flex-shrink: 0;
   object-fit: cover;
   box-shadow: 4px 8px 20px rgba(0,0,0,0.6);
@@ -163,7 +168,7 @@ body { font-family: var(--font-b); background: var(--bg); color: var(--text); mi
 }
 .book-cover-thumb:hover { transform: scale(1.04); }
 .book-cover-placeholder {
-  width: 80px; height: 115px;
+  width: 72px; height: 105px;
   border-radius: 8px; flex-shrink: 0;
   display: flex; align-items: center; justify-content: center;
   font-size: 2rem;
@@ -176,6 +181,9 @@ body { font-family: var(--font-b); background: var(--bg); color: var(--text); mi
   50% { opacity: 0.6; }
 }
 
+/* Info column next to cover */
+.book-card-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0.35rem; }
+.book-card-top-row { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
 .book-card-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0.5rem; }
 .cat-badge {
   display: inline-block; font-size: 0.62rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase;
@@ -190,45 +198,51 @@ body { font-family: var(--font-b); background: var(--bg); color: var(--text); mi
 .cat-Finance            { background: rgba(52,211,153,0.15);  color: var(--green); }
 .cat-Health             { background: rgba(251,113,133,0.15); color: var(--coral); }
 
-.book-title-text { font-family: var(--font-h); font-size: 1.05rem; font-weight: 700; color: var(--text); line-height: 1.3; }
-.book-author-text { font-size: 0.8rem; color: var(--text2); }
+.book-title-text { font-family: var(--font-h); font-size: 1rem; font-weight: 700; color: var(--text); line-height: 1.3; }
+.book-author-text { font-size: 0.78rem; color: var(--text2); }
 
-/* Circular Progress */
-.progress-row { display: flex; align-items: center; gap: 1rem; margin-top: 0.25rem; }
-.circle-progress-wrap { position: relative; width: 64px; height: 64px; flex-shrink: 0; }
+/* Bottom row: progress ring + controls, full width */
+.progress-row {
+  display: flex; align-items: center; gap: 1rem;
+  background: var(--surface); border-radius: var(--radius-sm);
+  padding: 0.75rem 1rem;
+}
+.circle-progress-wrap { position: relative; width: 58px; height: 58px; flex-shrink: 0; }
 .circle-progress-wrap svg { transform: rotate(-90deg); }
 .circle-bg { fill: none; stroke: var(--surface3); stroke-width: 5; }
 .circle-fill { fill: none; stroke-width: 5; stroke-linecap: round; transition: stroke-dashoffset 0.6s ease; }
 .circle-pct-label {
   position: absolute; inset: 0;
   display: flex; align-items: center; justify-content: center;
-  font-size: 0.72rem; font-weight: 800; color: var(--text);
+  font-size: 0.7rem; font-weight: 800; color: var(--text);
 }
 
-.page-update-col { flex: 1; display: flex; flex-direction: column; gap: 0.5rem; }
+/* Page controls column */
+.page-update-col { flex: 1; display: flex; flex-direction: column; gap: 0.5rem; min-width: 0; }
 .page-update-row { display: flex; align-items: center; gap: 0.5rem; }
 .page-input {
-  width: 80px; background: var(--surface); border: 1px solid var(--border);
+  flex: 1; min-width: 0; max-width: 90px;
+  background: var(--surface2); border: 1px solid var(--border);
   border-radius: 9px; color: var(--text); font-family: var(--font-b);
-  font-size: 0.9rem; font-weight: 700; padding: 0.4rem 0.6rem;
+  font-size: 0.95rem; font-weight: 700; padding: 0.45rem 0.6rem;
   text-align: center; outline: none; transition: border-color 0.2s;
 }
 .page-input:focus { border-color: var(--teal); }
-.page-of { font-size: 0.78rem; color: var(--text3); }
+.page-of { font-size: 0.78rem; color: var(--text3); white-space: nowrap; }
 .update-btn {
   background: var(--teal); color: #0d1117; border: none;
-  border-radius: 9px; font-family: var(--font-b); font-size: 0.78rem;
-  font-weight: 800; padding: 0.42rem 0.8rem; cursor: pointer;
-  transition: opacity 0.2s, transform 0.1s;
+  border-radius: 9px; font-family: var(--font-b); font-size: 0.82rem;
+  font-weight: 800; padding: 0.45rem 0.9rem; cursor: pointer;
+  transition: opacity 0.2s, transform 0.1s; white-space: nowrap;
 }
 .update-btn:hover { opacity: 0.85; }
 .update-btn:active { transform: scale(0.96); }
 .complete-btn {
   background: rgba(52,211,153,0.1); color: var(--green);
   border: 1px solid rgba(52,211,153,0.25); border-radius: 9px;
-  font-family: var(--font-b); font-size: 0.78rem; font-weight: 700;
-  padding: 0.42rem 0.9rem; cursor: pointer; transition: background 0.2s;
-  width: 100%;
+  font-family: var(--font-b); font-size: 0.82rem; font-weight: 700;
+  padding: 0.45rem 0.9rem; cursor: pointer; transition: background 0.2s;
+  width: 100%; text-align: center;
 }
 .complete-btn:hover { background: rgba(52,211,153,0.2); }
 
@@ -337,8 +351,7 @@ body { font-family: var(--font-b); background: var(--bg); color: var(--text); mi
   .page { width: 100%; overflow-x: hidden; }
   .page-title { font-size: 1.7rem; }
   .stats-grid { grid-template-columns: 1fr 1fr; }
-  .book-card { flex-wrap: nowrap; }
-  .page-update-row { flex-wrap: wrap; gap: 0.4rem; }
+  .page-update-row { flex-wrap: nowrap; gap: 0.4rem; }
   .form-row { grid-template-columns: 1fr; }
   .goal-card { padding: 1.1rem; }
   .filter-bar { overflow-x: auto; flex-wrap: nowrap; padding-bottom: 0.4rem; -webkit-overflow-scrolling: touch; }
@@ -1392,28 +1405,32 @@ function renderHome() {
 
     return `
     <div class="book-card">
-      ${coverThumb(book, 'book-cover-thumb', 'book-cover-placeholder')}
-      <div class="book-card-body">
-        <div class="book-card-top-row">
-          <div class="cat-badge ${catClass}">${esc(book.category)}</div>
-          <button class="card-edit-btn" onclick="openEditModal('${book.id}')" title="Edit">✏️</button>
+      <!-- Top: cover + info -->
+      <div class="book-card-top">
+        ${coverThumb(book, 'book-cover-thumb', 'book-cover-placeholder')}
+        <div class="book-card-info">
+          <div class="book-card-top-row">
+            <div class="cat-badge ${catClass}">${esc(book.category)}</div>
+            <button class="card-edit-btn" onclick="openEditModal('${book.id}')" title="Edit">✏️</button>
+          </div>
+          <div class="book-title-text">${esc(book.title)}</div>
+          <div class="book-author-text">by ${esc(book.author)}</div>
         </div>
-        <div class="book-title-text">${esc(book.title)}</div>
-        <div class="book-author-text">by ${esc(book.author)}</div>
-        <div class="progress-row">
-          <div class="circle-progress-wrap">
-            ${circleProgressSVG(pct, color)}
-            <div class="circle-pct-label">${pct}%</div>
+      </div>
+      <!-- Bottom: progress + controls full width -->
+      <div class="progress-row">
+        <div class="circle-progress-wrap">
+          ${circleProgressSVG(pct, color)}
+          <div class="circle-pct-label">${pct}%</div>
+        </div>
+        <div class="page-update-col">
+          <div class="page-update-row">
+            <input type="number" class="page-input" id="pi-${book.id}"
+              value="${book.currentPage}" min="0" max="${book.totalPages}" />
+            <span class="page-of">/ ${book.totalPages} pages</span>
+            <button class="update-btn" onclick="handlePageUpdate('${book.id}')">Update</button>
           </div>
-          <div class="page-update-col">
-            <div class="page-update-row">
-              <input type="number" class="page-input" id="pi-${book.id}"
-                value="${book.currentPage}" min="0" max="${book.totalPages}" />
-              <span class="page-of">/ ${book.totalPages}</span>
-              <button class="update-btn" onclick="handlePageUpdate('${book.id}')">Update</button>
-            </div>
-            <button class="complete-btn" onclick="completeBook('${book.id}')">✓ Mark Complete</button>
-          </div>
+          <button class="complete-btn" onclick="completeBook('${book.id}')">✓ Mark Complete</button>
         </div>
       </div>
     </div>`;
