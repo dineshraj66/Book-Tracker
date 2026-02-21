@@ -11,7 +11,7 @@
   <meta name="apple-mobile-web-app-title" content="PageTurn" />
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="application-name" content="PageTurn" />
-  <link rel="manifest" href="manifest.json" />
+  <link rel="manifest" href="./manifest.json" />
   <link rel="apple-touch-icon" href="icons/icon-192.png" />
   <link rel="apple-touch-icon" sizes="152x152" href="icons/icon-192.png" />
   <link rel="apple-touch-icon" sizes="180x180" href="icons/icon-192.png" />
@@ -226,17 +226,73 @@
   </div>
 </div>
 
+<!-- Install Banner -->
+<div class="install-banner" id="install-banner">
+  <div class="install-banner-left">
+    <img src="icons/icon-192.png" class="install-banner-icon" alt="" />
+    <div>
+      <div class="install-banner-title">Install PageTurn</div>
+      <div class="install-banner-sub">Add to your home screen</div>
+    </div>
+  </div>
+  <div class="install-banner-actions">
+    <button class="install-btn-yes" id="install-btn-yes">Install</button>
+    <button class="install-btn-no" id="install-btn-no">✕</button>
+  </div>
+</div>
+
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
 <script src="app.js"></script>
 <script>
+  // ---- Service Worker ----
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
-      navigator.serviceWorker.register('./sw.js')
-        .then(r => console.log('SW:', r.scope))
-        .catch(e => console.warn('SW failed:', e));
+      navigator.serviceWorker.register('./sw.js', { scope: './' })
+        .then(reg => {
+          console.log('✅ SW registered, scope:', reg.scope);
+        })
+        .catch(err => {
+          console.warn('❌ SW registration failed:', err);
+        });
     });
   }
+
+  // ---- PWA Install Prompt ----
+  let deferredPrompt = null;
+  const banner = document.getElementById('install-banner');
+  const btnYes = document.getElementById('install-btn-yes');
+  const btnNo  = document.getElementById('install-btn-no');
+
+  // Chrome/Android: capture the beforeinstallprompt event
+  window.addEventListener('beforeinstallprompt', e => {
+    e.preventDefault();
+    deferredPrompt = e;
+    // Show banner after a short delay
+    setTimeout(() => banner.classList.add('show'), 2500);
+  });
+
+  btnYes.addEventListener('click', async () => {
+    banner.classList.remove('show');
+    if (deferredPrompt) {
+      deferredPrompt.prompt();
+      const { outcome } = await deferredPrompt.userChoice;
+      console.log('Install outcome:', outcome);
+      deferredPrompt = null;
+    }
+  });
+
+  btnNo.addEventListener('click', () => {
+    banner.classList.remove('show');
+    deferredPrompt = null;
+  });
+
+  // Hide banner if already installed
+  window.addEventListener('appinstalled', () => {
+    banner.classList.remove('show');
+    deferredPrompt = null;
+    console.log('✅ App installed!');
+  });
 </script>
 </body>
 </html>

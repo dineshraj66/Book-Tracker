@@ -400,3 +400,94 @@ input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.5); cur
   .form-row { grid-template-columns: 1fr; }
   .goal-count { font-size: 1.9rem; }
 }
+
+/* ── Install Banner ── */
+.install-banner {
+  position: fixed;
+  bottom: calc(var(--bnav-h) + 0.75rem);
+  left: 50%;
+  transform: translateX(-50%) translateY(120px);
+  width: calc(100% - 2rem);
+  max-width: 480px;
+  background: var(--surface2);
+  border: 1px solid rgba(56,189,248,0.3);
+  border-radius: var(--radius);
+  padding: 1rem 1.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  z-index: 400;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.6);
+  opacity: 0;
+  transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.3s ease;
+  pointer-events: none;
+}
+.install-banner.show {
+  transform: translateX(-50%) translateY(0);
+  opacity: 1;
+  pointer-events: all;
+}
+.install-banner-left {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+.install-banner-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  flex-shrink: 0;
+}
+.install-banner-title {
+  font-size: 0.9rem;
+  font-weight: 800;
+  color: var(--text);
+}
+.install-banner-sub {
+  font-size: 0.72rem;
+  color: var(--text2);
+  margin-top: 0.1rem;
+}
+.install-banner-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+.install-btn-yes {
+  background: linear-gradient(135deg, var(--teal), var(--teal-dim));
+  color: #0d1117;
+  border: none;
+  border-radius: 10px;
+  font-family: var(--font-b);
+  font-size: 0.82rem;
+  font-weight: 800;
+  padding: 0.45rem 1rem;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+.install-btn-yes:hover { opacity: 0.85; }
+.install-btn-no {
+  background: none;
+  border: none;
+  color: var(--text3);
+  font-size: 1rem;
+  cursor: pointer;
+  padding: 0.3rem 0.4rem;
+  border-radius: 8px;
+  transition: color 0.2s, background 0.2s;
+}
+.install-btn-no:hover { color: var(--text); background: var(--surface3); }
+
+@media (min-width: 769px) {
+  .install-banner {
+    bottom: 1.5rem;
+    left: calc(var(--sidebar-w) + 2rem);
+    transform: translateY(120px);
+    max-width: 400px;
+  }
+  .install-banner.show {
+    transform: translateY(0);
+  }
+}

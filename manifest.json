@@ -2,12 +2,13 @@
   "name": "PageTurn – Book Tracker",
   "short_name": "PageTurn",
   "description": "Track your reading journey",
-  "start_url": "./index.html",
-  "id": "./",
+  "start_url": ".",
+  "scope": ".",
   "display": "standalone",
   "background_color": "#0d1117",
   "theme_color": "#0d1117",
-  "orientation": "portrait-primary",
+  "orientation": "any",
+  "lang": "en",
   "icons": [
     {
       "src": "icons/icon-192.png",
@@ -34,5 +35,6 @@
       "purpose": "maskable"
     }
   ],
-  "categories": ["productivity", "lifestyle", "education"]
+  "categories": ["productivity", "lifestyle", "education"],
+  "prefer_related_applications": false
 }
