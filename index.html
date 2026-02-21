@@ -200,6 +200,7 @@ body { font-family: var(--font-b); background: var(--bg); color: var(--text); mi
 
 .book-title-text { font-family: var(--font-h); font-size: 1rem; font-weight: 700; color: var(--text); line-height: 1.3; }
 .book-author-text { font-size: 0.78rem; color: var(--text2); }
+.last-read-label { font-size: 0.72rem; color: var(--teal); opacity: 0.8; margin-top: 0.1rem; }
 
 /* Bottom row: progress ring + controls, full width */
 .progress-row {
@@ -219,21 +220,23 @@ body { font-family: var(--font-b); background: var(--bg); color: var(--text); mi
 
 /* Page controls column */
 .page-update-col { flex: 1; display: flex; flex-direction: column; gap: 0.5rem; min-width: 0; }
-.page-update-row { display: flex; align-items: center; gap: 0.5rem; }
+.page-update-row { display: flex; align-items: center; gap: 0.5rem; flex-wrap: nowrap; }
 .page-input {
-  flex: 1; min-width: 0; max-width: 90px;
+  width: 72px; min-width: 72px; flex-shrink: 0;
   background: var(--surface2); border: 1px solid var(--border);
   border-radius: 9px; color: var(--text); font-family: var(--font-b);
-  font-size: 0.95rem; font-weight: 700; padding: 0.45rem 0.6rem;
+  font-size: 1rem; font-weight: 700; padding: 0.45rem 0.4rem;
   text-align: center; outline: none; transition: border-color 0.2s;
+  box-sizing: border-box;
 }
 .page-input:focus { border-color: var(--teal); }
-.page-of { font-size: 0.78rem; color: var(--text3); white-space: nowrap; }
+.page-of { font-size: 0.78rem; color: var(--text3); white-space: nowrap; flex-shrink: 0; }
 .update-btn {
   background: var(--teal); color: #0d1117; border: none;
   border-radius: 9px; font-family: var(--font-b); font-size: 0.82rem;
   font-weight: 800; padding: 0.45rem 0.9rem; cursor: pointer;
   transition: opacity 0.2s, transform 0.1s; white-space: nowrap;
+  flex-shrink: 0;
 }
 .update-btn:hover { opacity: 0.85; }
 .update-btn:active { transform: scale(0.96); }
@@ -1257,6 +1260,7 @@ async function updatePage(bookId, newPage) {
   if (!book) return;
   newPage = Math.max(0, Math.min(newPage, book.totalPages));
   book.currentPage = newPage;
+  book.lastUpdated = new Date().toISOString(); // save full timestamp
   const today = todayStr();
   const log = book.pageLogs.find(l => l.date === today);
   if (log) log.page = newPage; else book.pageLogs.push({ date: today, page: newPage });
@@ -1415,6 +1419,7 @@ function renderHome() {
           </div>
           <div class="book-title-text">${esc(book.title)}</div>
           <div class="book-author-text">by ${esc(book.author)}</div>
+          ${lastReadLabel(book) ? `<div class="last-read-label">🕐 Last read: ${lastReadLabel(book)}</div>` : ''}
         </div>
       </div>
       <!-- Bottom: progress + controls full width -->
@@ -1591,6 +1596,32 @@ function renderChart(done) {
 
 // ---- Utils ----
 function todayStr() { return new Date().toISOString().split('T')[0]; }
+
+function lastReadLabel(book) {
+  const ts = book.lastUpdated || book.startDate;
+  if (!ts) return null;
+  const date = new Date(ts);
+  if (isNaN(date)) return null;
+  const now = new Date();
+  const diffMs = now - date;
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMins / 60);
+  const diffDays = Math.floor(diffHours / 24);
+
+  let timeStr;
+  if (diffMins < 1)        timeStr = 'Just now';
+  else if (diffMins < 60)  timeStr = `${diffMins}m ago`;
+  else if (diffHours < 24) timeStr = `${diffHours}h ago`;
+  else if (diffDays === 1) timeStr = 'Yesterday';
+  else if (diffDays < 7)   timeStr = `${diffDays} days ago`;
+  else timeStr = date.toLocaleDateString('en-IN', { day:'numeric', month:'short' });
+
+  // Also show the actual time if it was today
+  const timeOfDay = date.toLocaleTimeString('en-IN', { hour:'2-digit', minute:'2-digit', hour12: true });
+  const isToday = diffDays < 1;
+  return isToday ? `${timeStr} · ${timeOfDay}` : timeStr;
+}
+
 function daysBetween(a,b) {
   if (!a||!b) return 0;
   return Math.max(1, Math.round((new Date(b)-new Date(a))/86400000));
