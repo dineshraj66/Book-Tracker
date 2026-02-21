@@ -231,23 +231,11 @@ body { font-family: var(--font-b); background: var(--bg); color: var(--text); mi
 }
 .page-input:focus { border-color: var(--teal); }
 .page-of { font-size: 0.78rem; color: var(--text3); white-space: nowrap; flex-shrink: 0; }
-.update-btn {
-  background: var(--teal); color: #0d1117; border: none;
-  border-radius: 9px; font-family: var(--font-b); font-size: 0.82rem;
-  font-weight: 800; padding: 0.45rem 0.9rem; cursor: pointer;
-  transition: opacity 0.2s, transform 0.1s; white-space: nowrap;
-  flex-shrink: 0;
+.page-hint {
+  font-size: 0.68rem; color: var(--text3);
+  font-style: italic; letter-spacing: 0.01em;
 }
-.update-btn:hover { opacity: 0.85; }
-.update-btn:active { transform: scale(0.96); }
-.complete-btn {
-  background: rgba(52,211,153,0.1); color: var(--green);
-  border: 1px solid rgba(52,211,153,0.25); border-radius: 9px;
-  font-family: var(--font-b); font-size: 0.82rem; font-weight: 700;
-  padding: 0.45rem 0.9rem; cursor: pointer; transition: background 0.2s;
-  width: 100%; text-align: center;
-}
-.complete-btn:hover { background: rgba(52,211,153,0.2); }
+
 
 /* ── Library Card ── */
 .lib-card {
@@ -458,6 +446,128 @@ input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.5); cur
 
 @media (min-width: 769px) {
   .toast { bottom: 1.5rem; }
+}
+
+/* ── Celebration Modal ── */
+.celebration-overlay {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.75);
+  backdrop-filter: blur(8px);
+  z-index: 400;
+  display: flex; align-items: center; justify-content: center;
+  opacity: 0; pointer-events: none;
+  transition: opacity 0.4s ease;
+}
+.celebration-overlay.show {
+  opacity: 1; pointer-events: all;
+}
+.celebration-card {
+  background: linear-gradient(145deg, #1c2333, #161b22);
+  border: 1px solid rgba(52,211,153,0.4);
+  border-radius: 28px;
+  padding: 2.5rem 2rem;
+  text-align: center;
+  max-width: 340px; width: 90%;
+  box-shadow: 0 0 80px rgba(52,211,153,0.15), 0 24px 60px rgba(0,0,0,0.6);
+  transform: scale(0.7) translateY(40px);
+  transition: transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+  position: relative; overflow: hidden;
+}
+.celebration-overlay.show .celebration-card {
+  transform: scale(1) translateY(0);
+}
+.celebration-card::before {
+  content: '';
+  position: absolute; top: -50%; left: -50%;
+  width: 200%; height: 200%;
+  background: radial-gradient(circle at 50% 0%, rgba(52,211,153,0.08) 0%, transparent 60%);
+  pointer-events: none;
+}
+.celebration-trophy {
+  font-size: 4.5rem;
+  display: block;
+  margin-bottom: 0.75rem;
+  animation: trophyBounce 0.6s cubic-bezier(0.34,1.56,0.64,1) 0.3s both;
+}
+@keyframes trophyBounce {
+  from { transform: scale(0) rotate(-20deg); opacity: 0; }
+  to   { transform: scale(1) rotate(0deg);  opacity: 1; }
+}
+.celebration-title {
+  font-family: var(--font-h);
+  font-size: 1.6rem; font-weight: 700;
+  color: var(--green); margin-bottom: 0.4rem;
+  animation: fadeSlideUp 0.5s ease 0.5s both;
+}
+.celebration-subtitle {
+  font-size: 0.88rem; color: var(--text2);
+  line-height: 1.6; margin-bottom: 0.3rem;
+  animation: fadeSlideUp 0.5s ease 0.6s both;
+}
+.celebration-book-title {
+  font-family: var(--font-h);
+  font-size: 1rem; font-weight: 700;
+  color: var(--text); margin-bottom: 1.5rem;
+  animation: fadeSlideUp 0.5s ease 0.65s both;
+}
+.celebration-stats {
+  display: flex; gap: 1rem; justify-content: center;
+  margin-bottom: 1.75rem;
+  animation: fadeSlideUp 0.5s ease 0.7s both;
+}
+.cel-stat {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 14px; padding: 0.75rem 1.1rem;
+  flex: 1;
+}
+.cel-stat-num {
+  font-family: var(--font-h);
+  font-size: 1.5rem; font-weight: 700;
+  color: var(--teal); display: block; line-height: 1;
+  margin-bottom: 0.2rem;
+}
+.cel-stat-lbl {
+  font-size: 0.65rem; color: var(--text3);
+  text-transform: uppercase; letter-spacing: 0.1em;
+}
+.celebration-actions {
+  display: flex; gap: 0.75rem;
+  animation: fadeSlideUp 0.5s ease 0.75s both;
+}
+.cel-btn-primary {
+  flex: 1; background: linear-gradient(135deg, var(--green), var(--teal-dim));
+  color: #0d1117; border: none; border-radius: 14px;
+  font-family: var(--font-b); font-size: 0.9rem; font-weight: 800;
+  padding: 0.8rem; cursor: pointer;
+  transition: opacity 0.2s, transform 0.1s;
+}
+.cel-btn-primary:hover { opacity: 0.9; }
+.cel-btn-primary:active { transform: scale(0.97); }
+.cel-btn-undo {
+  background: rgba(255,255,255,0.05); color: var(--text2);
+  border: 1px solid var(--border); border-radius: 14px;
+  font-family: var(--font-b); font-size: 0.82rem; font-weight: 700;
+  padding: 0.8rem 1rem; cursor: pointer;
+  transition: background 0.2s;
+}
+.cel-btn-undo:hover { background: rgba(255,255,255,0.1); }
+
+@keyframes fadeSlideUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Confetti */
+.confetti-piece {
+  position: fixed; pointer-events: none; z-index: 500;
+  border-radius: 2px;
+  animation: confettiFall linear forwards;
+}
+@keyframes confettiFall {
+  0%   { opacity: 1; }
+  80%  { opacity: 1; }
+  100% { transform: var(--tx) translateY(110vh) rotate(var(--rot)); opacity: 0; }
 }
 
 /* Mobile form adjustments */
@@ -1260,34 +1370,129 @@ async function updatePage(bookId, newPage) {
   if (!book) return;
   newPage = Math.max(0, Math.min(newPage, book.totalPages));
   book.currentPage = newPage;
-  book.lastUpdated = new Date().toISOString(); // save full timestamp
+  book.lastUpdated = new Date().toISOString();
   const today = todayStr();
   const log = book.pageLogs.find(l => l.date === today);
   if (log) log.page = newPage; else book.pageLogs.push({ date: today, page: newPage });
-  await saveBook(book);
-  renderHome();
-  showToast('✅ Progress updated!');
+
+  if (newPage >= book.totalPages) {
+    book.status = 'completed';
+    book.endDate = today;
+    await saveBook(book);
+    updateGoalCard();
+    renderHome();
+    showCompletionToast(book.title);
+  } else {
+    await saveBook(book);
+    renderHome();
+    showToast('✅ Progress saved');
+  }
 }
 
-window.handlePageUpdate = function(id) {
+// Auto-save on blur
+window.handlePageBlur = function(id) {
   const inp = document.getElementById('pi-' + id);
   if (!inp) return;
   const v = parseInt(inp.value);
   if (!isNaN(v)) updatePage(id, v);
 };
 
-// ---- Complete ----
-window.completeBook = async function(id) {
-  const book = books.find(b => b.id === id);
-  if (!book) return;
-  book.status = 'completed';
-  book.currentPage = book.totalPages;
-  book.endDate = todayStr();
-  await saveBook(book);
-  updateGoalCard();
-  renderHome();
-  showToast('🏆 Book completed! Amazing!');
-};
+function showCompletionToast(title) {
+  // Find book for stats
+  const book = books.find(b => b.title === title && b.status === 'completed');
+  const days = book ? daysBetween(book.startDate, book.endDate) : '—';
+  const pages = book ? book.totalPages : '—';
+  const doneCount = books.filter(b => b.status === 'completed' && new Date(b.endDate||'').getFullYear() === new Date().getFullYear()).length;
+
+  // Build overlay
+  let overlay = document.getElementById('_celebration_overlay');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = '_celebration_overlay';
+    overlay.className = 'celebration-overlay';
+    document.body.appendChild(overlay);
+  }
+
+  overlay.innerHTML = `
+    <div class="celebration-card">
+      <span class="celebration-trophy">🏆</span>
+      <div class="celebration-title">Book Complete!</div>
+      <div class="celebration-subtitle">You finished</div>
+      <div class="celebration-book-title">${esc(title)}</div>
+      <div class="celebration-stats">
+        <div class="cel-stat">
+          <span class="cel-stat-num">${days}</span>
+          <span class="cel-stat-lbl">Days</span>
+        </div>
+        <div class="cel-stat">
+          <span class="cel-stat-num">${pages}</span>
+          <span class="cel-stat-lbl">Pages</span>
+        </div>
+        <div class="cel-stat">
+          <span class="cel-stat-num">${doneCount}</span>
+          <span class="cel-stat-lbl">This Year</span>
+        </div>
+      </div>
+      <div class="celebration-actions">
+        <button class="cel-btn-primary" id="_cel_ok">🎉 Awesome!</button>
+        <button class="cel-btn-undo" id="_cel_undo">Undo</button>
+      </div>
+    </div>`;
+
+  // Show with slight delay for effect
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => overlay.classList.add('show'));
+  });
+
+  spawnConfetti();
+
+  document.getElementById('_cel_ok').onclick = () => {
+    overlay.classList.remove('show');
+  };
+
+  document.getElementById('_cel_undo').onclick = async () => {
+    const b = books.find(b => b.title === title && b.status === 'completed');
+    if (b) {
+      b.status = 'reading';
+      b.endDate = null;
+      b.currentPage = b.totalPages - 1;
+      await saveBook(b);
+      updateGoalCard();
+      renderHome();
+    }
+    overlay.classList.remove('show');
+  };
+}
+
+function spawnConfetti() {
+  const colors = ['#34d399','#38bdf8','#fbbf24','#fb7185','#a78bfa','#ffffff'];
+  const shapes = ['2px', '4px', '6px'];
+  for (let i = 0; i < 80; i++) {
+    const el = document.createElement('div');
+    el.className = 'confetti-piece';
+    const color = colors[Math.floor(Math.random() * colors.length)];
+    const size = (4 + Math.random() * 8) + 'px';
+    const startX = Math.random() * 100;
+    const tx = (Math.random() - 0.5) * 200;
+    const rot = Math.random() * 1080;
+    const dur = 1.8 + Math.random() * 1.8;
+    const delay = Math.random() * 0.6;
+    el.style.cssText = `
+      left: ${startX}vw;
+      top: -10px;
+      width: ${size};
+      height: ${size};
+      background: ${color};
+      --tx: translateX(${tx}px);
+      --rot: ${rot}deg;
+      animation-duration: ${dur}s;
+      animation-delay: ${delay}s;
+      ${Math.random() > 0.5 ? 'border-radius: 50%;' : ''}
+    `;
+    document.body.appendChild(el);
+    setTimeout(() => el.remove(), (dur + delay + 0.5) * 1000);
+  }
+}
 
 // ---- Delete ----
 window.deleteBook = async function(id) {
@@ -1431,21 +1636,18 @@ function renderHome() {
         <div class="page-update-col">
           <div class="page-update-row">
             <input type="number" class="page-input" id="pi-${book.id}"
-              value="${book.currentPage}" min="0" max="${book.totalPages}" />
+              value="${book.currentPage}" min="0" max="${book.totalPages}"
+              onblur="handlePageBlur('${book.id}')"
+              onkeydown="if(event.key==='Enter')this.blur()" />
             <span class="page-of">/ ${book.totalPages} pages</span>
-            <button class="update-btn" onclick="handlePageUpdate('${book.id}')">Update</button>
           </div>
-          <button class="complete-btn" onclick="completeBook('${book.id}')">✓ Mark Complete</button>
+          <div class="page-hint">Tap outside to save · Last page auto-completes 🎉</div>
         </div>
       </div>
     </div>`;
   }).join('');
 
-  container.querySelectorAll('.page-input').forEach(inp => {
-    inp.addEventListener('keydown', e => {
-      if (e.key === 'Enter') handlePageUpdate(inp.id.replace('pi-', ''));
-    });
-  });
+
 }
 
 // ---- Render Library ----
