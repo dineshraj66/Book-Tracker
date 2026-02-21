@@ -1,62 +1,55 @@
-// PageTurn SW v4
-const CACHE_NAME = 'pageturn-v4';
+// PageTurn SW v5 — for https://dineshraj66.github.io/Book-Tracker/
+const CACHE = 'pageturn-v5';
+const BASE  = '/Book-Tracker/';
 
-// Use relative URLs — works regardless of GitHub Pages subdirectory
 const ASSETS = [
-  'index.html',
-  'style.css',
-  'app.js',
-  'manifest.json',
-  'icons/icon-192.png',
-  'icons/icon-512.png',
-  'icons/icon-192-maskable.png',
-  'icons/icon-512-maskable.png'
+  BASE + 'index.html',
+  BASE + 'style.css',
+  BASE + 'app.js',
+  BASE + 'manifest.json',
+  BASE + 'icons/icon-192.png',
+  BASE + 'icons/icon-512.png',
+  BASE + 'icons/icon-192-maskable.png',
+  BASE + 'icons/icon-512-maskable.png'
 ];
 
-self.addEventListener('install', event => {
+self.addEventListener('install', e => {
   self.skipWaiting();
-  event.waitUntil(
-    caches.open(CACHE_NAME).then(cache => {
-      // Cache each file individually so one failure doesn't break all
-      return Promise.allSettled(
-        ASSETS.map(asset =>
-          cache.add(new Request(asset, { cache: 'reload' }))
-            .catch(e => console.warn('[SW] Failed to cache:', asset, e))
+  e.waitUntil(
+    caches.open(CACHE).then(cache =>
+      Promise.allSettled(
+        ASSETS.map(url =>
+          cache.add(new Request(url, { cache: 'reload' }))
+            .catch(err => console.warn('[SW] Could not cache:', url, err))
         )
-      );
-    })
+      )
+    )
   );
 });
 
-self.addEventListener('activate', event => {
-  event.waitUntil(
-    caches.keys().then(keys =>
-      Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k)))
-    ).then(() => self.clients.claim())
+self.addEventListener('activate', e => {
+  e.waitUntil(
+    caches.keys()
+      .then(keys => Promise.all(
+        keys.filter(k => k !== CACHE).map(k => caches.delete(k))
+      ))
+      .then(() => self.clients.claim())
   );
 });
 
-self.addEventListener('fetch', event => {
-  if (event.request.method !== 'GET') return;
-
-  const url = new URL(event.request.url);
-  // Only handle same-origin requests
+self.addEventListener('fetch', e => {
+  if (e.request.method !== 'GET') return;
+  const url = new URL(e.request.url);
   if (url.origin !== location.origin) return;
 
-  event.respondWith(
-    caches.open(CACHE_NAME).then(cache =>
-      cache.match(event.request).then(cached => {
-        // Network first for HTML, cache first for everything else
-        const isHTML = event.request.destination === 'document';
-        if (isHTML) {
-          return fetch(event.request)
-            .then(res => { cache.put(event.request, res.clone()); return res; })
-            .catch(() => cached || caches.match('index.html'));
-        }
-        return cached || fetch(event.request).then(res => {
-          if (res.status === 200) cache.put(event.request, res.clone());
+  e.respondWith(
+    caches.open(CACHE).then(cache =>
+      cache.match(e.request).then(cached => {
+        const fresh = fetch(e.request).then(res => {
+          if (res && res.status === 200) cache.put(e.request, res.clone());
           return res;
-        });
+        }).catch(() => cached);
+        return cached || fresh;
       })
     )
   );
