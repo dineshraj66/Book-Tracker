@@ -557,3 +557,158 @@ function showToast(msg) {
   clearTimeout(_toastTimer);
   _toastTimer = setTimeout(()=>t.classList.remove('show'), 2800);
 }
+
+// ================================
+//  IMPORT FEATURE
+// ================================
+
+function setupImport() {
+  const importBtn     = document.getElementById('import-btn');
+  const overlay       = document.getElementById('import-modal-overlay');
+  const closeBtn      = document.getElementById('import-modal-close');
+  const dropArea      = document.getElementById('import-drop');
+  const fileInput     = document.getElementById('import-file');
+  const preview       = document.getElementById('import-preview');
+  const previewInfo   = document.getElementById('import-preview-info');
+  const confirmBtn    = document.getElementById('import-confirm-btn');
+  const resultDiv     = document.getElementById('import-result');
+
+  if (!importBtn) return;
+
+  let parsedBooks = null;
+
+  importBtn.addEventListener('click', () => {
+    overlay.classList.add('open');
+    parsedBooks = null;
+    preview.style.display = 'none';
+    resultDiv.style.display = 'none';
+    fileInput.value = '';
+    dropArea.style.display = 'flex';
+  });
+
+  closeBtn.addEventListener('click', () => overlay.classList.remove('open'));
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.classList.remove('open'); });
+
+  dropArea.addEventListener('click', () => fileInput.click());
+
+  // Drag & drop
+  dropArea.addEventListener('dragover', e => { e.preventDefault(); dropArea.classList.add('dragover'); });
+  dropArea.addEventListener('dragleave', () => dropArea.classList.remove('dragover'));
+  dropArea.addEventListener('drop', e => {
+    e.preventDefault();
+    dropArea.classList.remove('dragover');
+    const file = e.dataTransfer.files[0];
+    if (file) readImportFile(file);
+  });
+
+  fileInput.addEventListener('change', () => {
+    if (fileInput.files[0]) readImportFile(fileInput.files[0]);
+  });
+
+  function readImportFile(file) {
+    const reader = new FileReader();
+    reader.onload = e => {
+      try {
+        const data = JSON.parse(e.target.result);
+        // Accept array directly or { books: [...] }
+        parsedBooks = Array.isArray(data) ? data : (data.books || []);
+
+        if (!parsedBooks.length) {
+          showResult('❌ No books found in file.', false);
+          return;
+        }
+
+        // Count new vs duplicate
+        const existingIds    = new Set(books.map(b => b.id));
+        const existingTitles = new Set(books.map(b => b.title.toLowerCase().trim()));
+        const newBooks  = parsedBooks.filter(b => !existingTitles.has((b.title||'').toLowerCase().trim()));
+        const dupes     = parsedBooks.length - newBooks.length;
+        const completed = parsedBooks.filter(b => b.status === 'completed').length;
+        const reading   = parsedBooks.filter(b => b.status === 'reading').length;
+
+        previewInfo.innerHTML = `
+          <div class="import-stat-row">
+            <div class="import-stat"><span class="import-stat-n">${parsedBooks.length}</span><span>Total</span></div>
+            <div class="import-stat"><span class="import-stat-n" style="color:var(--green)">${completed}</span><span>Completed</span></div>
+            <div class="import-stat"><span class="import-stat-n" style="color:var(--teal)">${reading}</span><span>Reading</span></div>
+            <div class="import-stat"><span class="import-stat-n" style="color:var(--coral)">${dupes}</span><span>Duplicates</span></div>
+          </div>
+          ${dupes > 0 ? `<div style="font-size:0.75rem;color:var(--text3);margin-top:0.5rem">⚠️ ${dupes} duplicate(s) will be skipped</div>` : ''}
+        `;
+        dropArea.style.display = 'none';
+        preview.style.display  = 'block';
+        resultDiv.style.display = 'none';
+        confirmBtn.textContent = `⬆ Import ${newBooks.length} Books`;
+        confirmBtn._newBooks = newBooks;
+      } catch(err) {
+        showResult('❌ Invalid JSON file: ' + err.message, false);
+      }
+    };
+    reader.readAsText(file);
+  }
+
+  confirmBtn.addEventListener('click', async () => {
+    const toImport = confirmBtn._newBooks;
+    if (!toImport || !toImport.length) {
+      showResult('Nothing new to import.', false);
+      return;
+    }
+
+    confirmBtn.disabled = true;
+    confirmBtn.textContent = 'Importing…';
+
+    let saved = 0;
+    for (const book of toImport) {
+      // Ensure required fields
+      const b = {
+        id:          book.id || ('import_' + Date.now() + '_' + Math.random().toString(36).slice(2,6)),
+        title:       book.title || 'Untitled',
+        author:      book.author || 'Unknown',
+        category:    normCategory(book.category),
+        totalPages:  parseInt(book.totalPages) || 200,
+        currentPage: parseInt(book.currentPage) || (book.status === 'completed' ? parseInt(book.totalPages)||200 : 0),
+        startDate:   book.startDate || null,
+        endDate:     book.endDate   || null,
+        status:      book.status === 'reading' ? 'reading' : 'completed',
+        pageLogs:    book.pageLogs  || [],
+        cover:       book.cover     || null,
+      };
+      books.push(b);
+      await saveBook(b);
+      saved++;
+    }
+
+    showResult(`✅ Successfully imported ${saved} books!`, true);
+    updateGoalCard();
+    confirmBtn.disabled = false;
+  });
+
+  function showResult(msg, success) {
+    preview.style.display   = 'none';
+    dropArea.style.display  = 'none';
+    resultDiv.style.display = 'block';
+    resultDiv.innerHTML = `<div style="font-size:1.5rem;margin-bottom:0.5rem">${success ? '🎉' : '⚠️'}</div>
+      <div style="font-size:0.95rem;font-weight:700;color:${success ? 'var(--green)' : 'var(--coral)'}">${msg}</div>
+      ${success ? '<div style="font-size:0.78rem;color:var(--text3);margin-top:0.5rem">Go to History to see all your books</div>' : ''}`;
+    if (success) setTimeout(() => { overlay.classList.remove('open'); renderHistory(); }, 2200);
+  }
+
+  function normCategory(cat) {
+    if (!cat) return 'Self Development';
+    const c = cat.toLowerCase().trim();
+    const map = {
+      'self help': 'Self Development', 'selfhelp': 'Self Development',
+      'self development': 'Self Development', 'finance': 'Finance',
+      'trading': 'Trading', 'biography': 'Biography',
+      'relationship': 'Relationship', 'mindset': 'Mindset', 'health': 'Health',
+    };
+    return map[c] || 'Self Development';
+  }
+}
+
+// Call setupImport when app inits
+const _origInitApp = initApp;
+// Patch: call setupImport after DOM ready
+document.addEventListener('DOMContentLoaded', () => {
+  setTimeout(setupImport, 500);
+});
