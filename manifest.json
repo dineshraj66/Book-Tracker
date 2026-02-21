@@ -1,0 +1,35 @@
+{
+  "name": "PageTurn – Book Tracker",
+  "short_name": "PageTurn",
+  "description": "Track your reading journey with PageTurn",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#0f0800",
+  "theme_color": "#1a0a00",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["productivity", "lifestyle", "education"],
+  "screenshots": [],
+  "shortcuts": [
+    {
+      "name": "Add Book",
+      "short_name": "Add",
+      "description": "Add a new book to your tracker",
+      "url": "./index.html#home",
+      "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }]
+    }
+  ]
+}
