@@ -1214,15 +1214,19 @@ async function saveBook(book) {
     if (i >= 0) d.books[i] = book; else d.books.push(book);
     lsSave(d);
   } else {
-    // Save cover separately in localStorage (too large for Firestore)
+    // Save cover to localStorage cache
     if (book.cover) {
       try {
         const covers = JSON.parse(localStorage.getItem('pageturn_covers') || '{}');
         covers[book.id] = book.cover;
         localStorage.setItem('pageturn_covers', JSON.stringify(covers));
       } catch(e) {}
+      // Also persist cover in Firestore (separate collection so it doesn't bloat book docs)
+      try {
+        await db.collection('covers').doc(book.id).set({ data: book.cover });
+      } catch(e) { console.warn('Cover Firestore save failed:', e); }
     }
-    // Strip cover before saving to Firestore
+    // Strip cover before saving to Firestore books collection
     const { id, cover, ...data } = book;
     await db.collection('books').doc(id).set(data);
   }
@@ -1235,7 +1239,16 @@ async function deleteBookData(id) {
     lsSave(d);
   } else {
     await db.collection('books').doc(id).delete();
+    // Clean up cover from Firestore covers collection
+    try { await db.collection('covers').doc(id).delete(); } catch(e) {}
   }
+  // Clean up from localStorage and memory cache
+  try {
+    const covers = JSON.parse(localStorage.getItem('pageturn_covers') || '{}');
+    delete covers[id];
+    localStorage.setItem('pageturn_covers', JSON.stringify(covers));
+  } catch(e) {}
+  delete coverCache[id];
 }
 
 async function saveGoalData() {
@@ -1541,6 +1554,24 @@ async function fetchCoverURL(book) {
       return stored[book.id];
     }
   } catch(e) {}
+
+  // If using Firestore, try recovering cover from Firestore covers collection
+  if (!useLocal) {
+    try {
+      const doc = await db.collection('covers').doc(book.id).get();
+      if (doc.exists && doc.data().data) {
+        const url = doc.data().data;
+        coverCache[cacheKey] = url;
+        // Restore to localStorage so future loads are instant
+        try {
+          const stored = JSON.parse(localStorage.getItem('pageturn_covers') || '{}');
+          stored[book.id] = url;
+          localStorage.setItem('pageturn_covers', JSON.stringify(stored));
+        } catch(e) {}
+        return url;
+      }
+    } catch(e) { console.warn('Cover Firestore fetch failed:', e); }
+  }
 
   // Fetch from Google Books API
   try {
