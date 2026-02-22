@@ -1169,6 +1169,22 @@ async function loadData() {
       const gs = await db.collection('settings').doc('goal').get();
       if (gs.exists) goal = gs.data();
 
+      // One-time: bulk-load all Firestore covers into localStorage on startup
+      // This handles the case where localStorage was cleared
+      try {
+        const coversSnap = await db.collection('covers').get();
+        if (!coversSnap.empty) {
+          const stored = JSON.parse(localStorage.getItem('pageturn_covers') || '{}');
+          coversSnap.docs.forEach(d => {
+            if (d.data().data) {
+              stored[d.id] = d.data().data;
+              coverCache[d.id] = d.data().data;
+            }
+          });
+          localStorage.setItem('pageturn_covers', JSON.stringify(stored));
+        }
+      } catch(e) { console.warn('Bulk cover load failed:', e); }
+
       // Real-time listener for books — auto-syncs across all devices
       db.collection('books').onSnapshot(async snapshot => {
         const covers = JSON.parse(localStorage.getItem('pageturn_covers') || '{}');
@@ -1211,6 +1227,24 @@ async function loadData() {
   }
 }
 
+// Compress a base64 image to a smaller size for Firestore storage
+function compressCover(dataUrl, maxW, maxH, quality) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const scale = Math.min(maxW / img.width, maxH / img.height, 1);
+      const w = Math.round(img.width * scale);
+      const h = Math.round(img.height * scale);
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      resolve(canvas.toDataURL('image/jpeg', quality));
+    };
+    img.onerror = reject;
+    img.src = dataUrl;
+  });
+}
+
 async function saveBook(book) {
   if (useLocal) {
     const d = lsLoad();
@@ -1218,16 +1252,17 @@ async function saveBook(book) {
     if (i >= 0) d.books[i] = book; else d.books.push(book);
     lsSave(d);
   } else {
-    // Save cover to localStorage cache
+    // Save cover to localStorage (full res) and Firestore (compressed)
     if (book.cover) {
       try {
         const covers = JSON.parse(localStorage.getItem('pageturn_covers') || '{}');
         covers[book.id] = book.cover;
         localStorage.setItem('pageturn_covers', JSON.stringify(covers));
       } catch(e) {}
-      // Also persist cover in Firestore (separate collection so it doesn't bloat book docs)
+      // Compress cover before saving to Firestore (max 120x180px, quality 0.7)
       try {
-        await db.collection('covers').doc(book.id).set({ data: book.cover });
+        const compressed = await compressCover(book.cover, 120, 180, 0.7);
+        await db.collection('covers').doc(book.id).set({ data: compressed });
       } catch(e) { console.warn('Cover Firestore save failed:', e); }
     }
     // Strip cover before saving to Firestore books collection
