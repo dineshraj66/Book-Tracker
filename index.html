@@ -170,27 +170,11 @@ body { font-family: var(--font-b); background: var(--bg); color: var(--text); mi
 .book-cover-placeholder {
   width: 72px; height: 105px;
   border-radius: 8px; flex-shrink: 0;
-  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
-  font-size: 0.65rem; font-weight: 800; color: rgba(255,255,255,0.9);
-  text-align: center; padding: 6px;
-  background: linear-gradient(160deg, var(--cover-color, #38bdf8) 0%, color-mix(in srgb, var(--cover-color, #38bdf8) 60%, #000) 100%);
-  border: none;
-  box-shadow: inset -3px 0 8px rgba(0,0,0,0.3), 3px 4px 12px rgba(0,0,0,0.5);
-  line-height: 1.2; overflow: hidden; position: relative;
-}
-.book-cover-placeholder::before {
-  content: '';
-  position: absolute; left: 0; top: 0; bottom: 0; width: 6px;
-  background: rgba(0,0,0,0.25);
-  border-radius: 8px 0 0 8px;
-}
-.book-cover-placeholder .cover-initials {
-  font-size: 1.6rem; font-weight: 900; opacity: 0.9; line-height: 1;
-}
-.book-cover-placeholder .cover-title-text {
-  font-size: 0.55rem; font-weight: 700; opacity: 0.8;
-  word-break: break-word; text-align: center; padding: 0 4px;
-  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 2rem;
+  background: linear-gradient(135deg, var(--surface3), var(--surface2));
+  border: 1px solid var(--border);
+  animation: shimmer 1.8s infinite;
 }
 @keyframes shimmer {
   0%, 100% { opacity: 1; }
@@ -224,18 +208,14 @@ body { font-family: var(--font-b); background: var(--bg); color: var(--text); mi
   background: var(--surface); border-radius: var(--radius-sm);
   padding: 0.75rem 1rem;
 }
-.circle-progress-wrap { position: relative; width: 120px; height: 120px; flex-shrink: 0; }
+.circle-progress-wrap { position: relative; width: 58px; height: 58px; flex-shrink: 0; }
 .circle-progress-wrap svg { transform: rotate(-90deg); }
-.circle-bg { fill: none; stroke: var(--surface3); stroke-width: 7; }
-.circle-fill { fill: none; stroke-width: 7; stroke-linecap: round; transition: stroke-dashoffset 0.6s ease; }
+.circle-bg { fill: none; stroke: var(--surface3); stroke-width: 5; }
+.circle-fill { fill: none; stroke-width: 5; stroke-linecap: round; transition: stroke-dashoffset 0.6s ease; }
 .circle-pct-label {
   position: absolute; inset: 0;
-  display: flex; flex-direction: column; align-items: center; justify-content: center;
-  font-size: 1.5rem; font-weight: 900; color: var(--text);
-  line-height: 1;
-}
-.circle-pct-label small {
-  font-size: 0.6rem; font-weight: 600; opacity: 0.5; margin-top: 2px; letter-spacing: 0.05em;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 0.7rem; font-weight: 800; color: var(--text);
 }
 
 /* Page controls column */
@@ -251,11 +231,23 @@ body { font-family: var(--font-b); background: var(--bg); color: var(--text); mi
 }
 .page-input:focus { border-color: var(--teal); }
 .page-of { font-size: 0.78rem; color: var(--text3); white-space: nowrap; flex-shrink: 0; }
-.page-hint {
-  font-size: 0.68rem; color: var(--text3);
-  font-style: italic; letter-spacing: 0.01em;
+.update-btn {
+  background: var(--teal); color: #0d1117; border: none;
+  border-radius: 9px; font-family: var(--font-b); font-size: 0.82rem;
+  font-weight: 800; padding: 0.45rem 0.9rem; cursor: pointer;
+  transition: opacity 0.2s, transform 0.1s; white-space: nowrap;
+  flex-shrink: 0;
 }
-
+.update-btn:hover { opacity: 0.85; }
+.update-btn:active { transform: scale(0.96); }
+.complete-btn {
+  background: rgba(52,211,153,0.1); color: var(--green);
+  border: 1px solid rgba(52,211,153,0.25); border-radius: 9px;
+  font-family: var(--font-b); font-size: 0.82rem; font-weight: 700;
+  padding: 0.45rem 0.9rem; cursor: pointer; transition: background 0.2s;
+  width: 100%; text-align: center;
+}
+.complete-btn:hover { background: rgba(52,211,153,0.2); }
 
 /* ── Library Card ── */
 .lib-card {
@@ -268,8 +260,7 @@ body { font-family: var(--font-b); background: var(--bg); color: var(--text); mi
 .lib-card:hover { border-color: rgba(56,189,248,0.2); transform: translateX(3px); }
 .lib-cover { width: 52px; height: 72px; border-radius: 7px; object-fit: cover; flex-shrink: 0; box-shadow: 3px 4px 12px rgba(0,0,0,0.5); transition: transform 0.2s; }
 .lib-cover:hover { transform: scale(1.05); }
-.lib-cover-placeholder { width: 52px; height: 72px; border-radius: 7px; flex-shrink: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; background: linear-gradient(160deg, var(--cover-color, #38bdf8) 0%, color-mix(in srgb, var(--cover-color, #38bdf8) 60%, #000) 100%); box-shadow: inset -2px 0 6px rgba(0,0,0,0.3), 2px 3px 8px rgba(0,0,0,0.5); position: relative; overflow: hidden; }
-.lib-cover-placeholder::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 5px; background: rgba(0,0,0,0.25); border-radius: 7px 0 0 7px; }
+.lib-cover-placeholder { width: 52px; height: 72px; border-radius: 7px; background: linear-gradient(135deg, var(--surface3), var(--surface2)); display: flex; align-items: center; justify-content: center; font-size: 1.4rem; flex-shrink: 0; border: 1px solid var(--border); animation: shimmer 1.8s infinite; }
 .lib-info { flex: 1; min-width: 0; }
 .lib-title { font-family: var(--font-h); font-size: 0.95rem; font-weight: 700; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .lib-author { font-size: 0.75rem; color: var(--text2); margin-bottom: 0.3rem; }
@@ -299,8 +290,7 @@ body { font-family: var(--font-b); background: var(--bg); color: var(--text); mi
 }
 .hist-cover { width: 58px; height: 80px; border-radius: 8px; object-fit: cover; flex-shrink: 0; box-shadow: 4px 6px 16px rgba(0,0,0,0.6); transition: transform 0.2s; }
 .hist-cover:hover { transform: scale(1.04); }
-.hist-cover-placeholder { width: 58px; height: 80px; border-radius: 8px; flex-shrink: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; background: linear-gradient(160deg, var(--cover-color, #38bdf8) 0%, color-mix(in srgb, var(--cover-color, #38bdf8) 60%, #000) 100%); box-shadow: inset -2px 0 6px rgba(0,0,0,0.3), 3px 4px 12px rgba(0,0,0,0.5); position: relative; overflow: hidden; }
-.hist-cover-placeholder::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 5px; background: rgba(0,0,0,0.25); border-radius: 8px 0 0 8px; }
+.hist-cover-placeholder { width: 58px; height: 80px; border-radius: 8px; background: linear-gradient(135deg, var(--surface3), var(--surface2)); display: flex; align-items: center; justify-content: center; font-size: 1.6rem; flex-shrink: 0; border: 1px solid var(--border); animation: shimmer 1.8s infinite; }
 .hist-info { flex: 1; min-width: 0; }
 .hist-title { font-family: var(--font-h); font-size: 1rem; font-weight: 700; color: var(--text); }
 .hist-author { font-size: 0.78rem; color: var(--text2); margin-bottom: 0.2rem; }
@@ -337,6 +327,12 @@ body { font-family: var(--font-b); background: var(--bg); color: var(--text); mi
 }
 .chart-month { font-size: 0.62rem; color: var(--text3); letter-spacing: 0.05em; }
 .chart-val { font-size: 0.7rem; color: var(--text2); font-weight: 700; }
+.cat-chart { display: flex; flex-direction: column; gap: 0.8rem; }
+.cat-row { display: flex; align-items: center; gap: 0.75rem; }
+.cat-row-label { font-size: 0.72rem; font-weight: 700; color: var(--text2); width: 120px; flex-shrink: 0; text-align: right; }
+.cat-bar-track { flex: 1; height: 24px; background: var(--surface3); border-radius: 6px; overflow: hidden; }
+.cat-bar-fill { height: 100%; border-radius: 6px; transition: width 0.7s ease; display: flex; align-items: center; padding-left: 8px; min-width: 28px; }
+.cat-bar-count { font-size: 0.72rem; font-weight: 800; color: rgba(0,0,0,0.75); }
 
 /* ── Empty State ── */
 .empty-state { text-align: center; padding: 3rem 1rem; color: var(--text3); }
@@ -468,128 +464,6 @@ input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.5); cur
 
 @media (min-width: 769px) {
   .toast { bottom: 1.5rem; }
-}
-
-/* ── Celebration Modal ── */
-.celebration-overlay {
-  position: fixed; inset: 0;
-  background: rgba(0,0,0,0.75);
-  backdrop-filter: blur(8px);
-  z-index: 400;
-  display: flex; align-items: center; justify-content: center;
-  opacity: 0; pointer-events: none;
-  transition: opacity 0.4s ease;
-}
-.celebration-overlay.show {
-  opacity: 1; pointer-events: all;
-}
-.celebration-card {
-  background: linear-gradient(145deg, #1c2333, #161b22);
-  border: 1px solid rgba(52,211,153,0.4);
-  border-radius: 28px;
-  padding: 2.5rem 2rem;
-  text-align: center;
-  max-width: 340px; width: 90%;
-  box-shadow: 0 0 80px rgba(52,211,153,0.15), 0 24px 60px rgba(0,0,0,0.6);
-  transform: scale(0.7) translateY(40px);
-  transition: transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
-  position: relative; overflow: hidden;
-}
-.celebration-overlay.show .celebration-card {
-  transform: scale(1) translateY(0);
-}
-.celebration-card::before {
-  content: '';
-  position: absolute; top: -50%; left: -50%;
-  width: 200%; height: 200%;
-  background: radial-gradient(circle at 50% 0%, rgba(52,211,153,0.08) 0%, transparent 60%);
-  pointer-events: none;
-}
-.celebration-trophy {
-  font-size: 4.5rem;
-  display: block;
-  margin-bottom: 0.75rem;
-  animation: trophyBounce 0.6s cubic-bezier(0.34,1.56,0.64,1) 0.3s both;
-}
-@keyframes trophyBounce {
-  from { transform: scale(0) rotate(-20deg); opacity: 0; }
-  to   { transform: scale(1) rotate(0deg);  opacity: 1; }
-}
-.celebration-title {
-  font-family: var(--font-h);
-  font-size: 1.6rem; font-weight: 700;
-  color: var(--green); margin-bottom: 0.4rem;
-  animation: fadeSlideUp 0.5s ease 0.5s both;
-}
-.celebration-subtitle {
-  font-size: 0.88rem; color: var(--text2);
-  line-height: 1.6; margin-bottom: 0.3rem;
-  animation: fadeSlideUp 0.5s ease 0.6s both;
-}
-.celebration-book-title {
-  font-family: var(--font-h);
-  font-size: 1rem; font-weight: 700;
-  color: var(--text); margin-bottom: 1.5rem;
-  animation: fadeSlideUp 0.5s ease 0.65s both;
-}
-.celebration-stats {
-  display: flex; gap: 1rem; justify-content: center;
-  margin-bottom: 1.75rem;
-  animation: fadeSlideUp 0.5s ease 0.7s both;
-}
-.cel-stat {
-  background: rgba(255,255,255,0.04);
-  border: 1px solid rgba(255,255,255,0.08);
-  border-radius: 14px; padding: 0.75rem 1.1rem;
-  flex: 1;
-}
-.cel-stat-num {
-  font-family: var(--font-h);
-  font-size: 1.5rem; font-weight: 700;
-  color: var(--teal); display: block; line-height: 1;
-  margin-bottom: 0.2rem;
-}
-.cel-stat-lbl {
-  font-size: 0.65rem; color: var(--text3);
-  text-transform: uppercase; letter-spacing: 0.1em;
-}
-.celebration-actions {
-  display: flex; gap: 0.75rem;
-  animation: fadeSlideUp 0.5s ease 0.75s both;
-}
-.cel-btn-primary {
-  flex: 1; background: linear-gradient(135deg, var(--green), var(--teal-dim));
-  color: #0d1117; border: none; border-radius: 14px;
-  font-family: var(--font-b); font-size: 0.9rem; font-weight: 800;
-  padding: 0.8rem; cursor: pointer;
-  transition: opacity 0.2s, transform 0.1s;
-}
-.cel-btn-primary:hover { opacity: 0.9; }
-.cel-btn-primary:active { transform: scale(0.97); }
-.cel-btn-undo {
-  background: rgba(255,255,255,0.05); color: var(--text2);
-  border: 1px solid var(--border); border-radius: 14px;
-  font-family: var(--font-b); font-size: 0.82rem; font-weight: 700;
-  padding: 0.8rem 1rem; cursor: pointer;
-  transition: background 0.2s;
-}
-.cel-btn-undo:hover { background: rgba(255,255,255,0.1); }
-
-@keyframes fadeSlideUp {
-  from { opacity: 0; transform: translateY(12px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-
-/* Confetti */
-.confetti-piece {
-  position: fixed; pointer-events: none; z-index: 500;
-  border-radius: 2px;
-  animation: confettiFall linear forwards;
-}
-@keyframes confettiFall {
-  0%   { opacity: 1; }
-  80%  { opacity: 1; }
-  100% { transform: var(--tx) translateY(110vh) rotate(var(--rot)); opacity: 0; }
 }
 
 /* Mobile form adjustments */
@@ -824,6 +698,12 @@ input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.5); cur
       </div>
       <div class="section-label" style="margin-top:2rem">Books per Month</div>
       <div class="chart-wrap" id="monthly-chart"></div>
+
+      <div class="section-label" style="margin-top:2rem">Books Read by Year</div>
+      <div class="chart-wrap" id="yearly-chart"></div>
+
+      <div class="section-label" style="margin-top:2rem">Books by Category</div>
+      <div class="chart-wrap" id="category-chart"></div>
     </section>
   </main>
 
@@ -1161,12 +1041,12 @@ function setupNav() {
   });
 }
 
-async function goTo(page) {
+function goTo(page) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('[data-page]').forEach(l => l.classList.remove('active'));
   document.getElementById('page-' + page).classList.add('active');
   document.querySelectorAll(`[data-page="${page}"]`).forEach(l => l.classList.add('active'));
-  await prefetchCovers(books);
+  sessionStorage.setItem('pageturn_page', page);
   if (page === 'home')    renderHome();
   if (page === 'library') renderLibrary();
   if (page === 'history') renderHistory();
@@ -1179,41 +1059,33 @@ async function loadData() {
     const d = lsLoad();
     books = d.books || [];
     goal  = d.goal  || { year: new Date().getFullYear(), target: 20 };
-    await prefetchCovers(books);
-    renderHome();
+    const savedPage = sessionStorage.getItem('pageturn_page') || 'home';
+    goTo(savedPage);
   } else {
     try {
       // Load goal once
       const gs = await db.collection('settings').doc('goal').get();
       if (gs.exists) goal = gs.data();
 
-      // One-time: bulk-load all Firestore covers into localStorage on startup
-      // This handles the case where localStorage was cleared
-      try {
-        const coversSnap = await db.collection('covers').get();
-        if (!coversSnap.empty) {
-          const stored = JSON.parse(localStorage.getItem('pageturn_covers') || '{}');
-          coversSnap.docs.forEach(d => {
-            if (d.data().data) {
-              stored[d.id] = d.data().data;
-              coverCache[d.id] = d.data().data;
-            }
-          });
-          localStorage.setItem('pageturn_covers', JSON.stringify(stored));
-        }
-      } catch(e) { console.warn('Bulk cover load failed:', e); }
+      // Restore last visited page before first render
+      const _savedPage = sessionStorage.getItem('pageturn_page') || 'home';
+      document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+      document.querySelectorAll('[data-page]').forEach(l => l.classList.remove('active'));
+      const _pageEl = document.getElementById('page-' + _savedPage);
+      if (_pageEl) {
+        _pageEl.classList.add('active');
+        document.querySelectorAll(`[data-page="${_savedPage}"]`).forEach(l => l.classList.add('active'));
+      }
 
       // Real-time listener for books — auto-syncs across all devices
-      db.collection('books').onSnapshot(async snapshot => {
+      db.collection('books').onSnapshot(snapshot => {
         const covers = JSON.parse(localStorage.getItem('pageturn_covers') || '{}');
         books = snapshot.docs.map(d => ({
           id: d.id,
           ...d.data(),
           cover: covers[d.id] || null  // restore cover from local cache
         }));
-        // Pre-fetch all covers into cache before rendering so coverThumb() works synchronously
-        await prefetchCovers(books);
-        // Re-render whichever page is active
+        // Render immediately — no waiting for cover prefetch
         const activePage = document.querySelector('.page.active')?.id?.replace('page-','');
         if (activePage === 'home')    renderHome();
         if (activePage === 'library') renderLibrary();
@@ -1245,24 +1117,6 @@ async function loadData() {
   }
 }
 
-// Compress a base64 image to a smaller size for Firestore storage
-function compressCover(dataUrl, maxW, maxH, quality) {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.onload = () => {
-      const scale = Math.min(maxW / img.width, maxH / img.height, 1);
-      const w = Math.round(img.width * scale);
-      const h = Math.round(img.height * scale);
-      const canvas = document.createElement('canvas');
-      canvas.width = w; canvas.height = h;
-      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
-      resolve(canvas.toDataURL('image/jpeg', quality));
-    };
-    img.onerror = reject;
-    img.src = dataUrl;
-  });
-}
-
 async function saveBook(book) {
   if (useLocal) {
     const d = lsLoad();
@@ -1270,20 +1124,15 @@ async function saveBook(book) {
     if (i >= 0) d.books[i] = book; else d.books.push(book);
     lsSave(d);
   } else {
-    // Save cover to localStorage (full res) and Firestore (compressed)
+    // Save cover separately in localStorage (too large for Firestore)
     if (book.cover) {
       try {
         const covers = JSON.parse(localStorage.getItem('pageturn_covers') || '{}');
         covers[book.id] = book.cover;
         localStorage.setItem('pageturn_covers', JSON.stringify(covers));
       } catch(e) {}
-      // Compress cover before saving to Firestore (max 120x180px, quality 0.7)
-      try {
-        const compressed = await compressCover(book.cover, 120, 180, 0.7);
-        await db.collection('covers').doc(book.id).set({ data: compressed });
-      } catch(e) { console.warn('Cover Firestore save failed:', e); }
     }
-    // Strip cover before saving to Firestore books collection
+    // Strip cover before saving to Firestore
     const { id, cover, ...data } = book;
     await db.collection('books').doc(id).set(data);
   }
@@ -1296,16 +1145,7 @@ async function deleteBookData(id) {
     lsSave(d);
   } else {
     await db.collection('books').doc(id).delete();
-    // Clean up cover from Firestore covers collection
-    try { await db.collection('covers').doc(id).delete(); } catch(e) {}
   }
-  // Clean up from localStorage and memory cache
-  try {
-    const covers = JSON.parse(localStorage.getItem('pageturn_covers') || '{}');
-    delete covers[id];
-    localStorage.setItem('pageturn_covers', JSON.stringify(covers));
-  } catch(e) {}
-  delete coverCache[id];
 }
 
 async function saveGoalData() {
@@ -1444,129 +1284,34 @@ async function updatePage(bookId, newPage) {
   if (!book) return;
   newPage = Math.max(0, Math.min(newPage, book.totalPages));
   book.currentPage = newPage;
-  book.lastUpdated = new Date().toISOString();
+  book.lastUpdated = new Date().toISOString(); // save full timestamp
   const today = todayStr();
   const log = book.pageLogs.find(l => l.date === today);
   if (log) log.page = newPage; else book.pageLogs.push({ date: today, page: newPage });
-
-  if (newPage >= book.totalPages) {
-    book.status = 'completed';
-    book.endDate = today;
-    await saveBook(book);
-    updateGoalCard();
-    renderHome();
-    showCompletionToast(book.title);
-  } else {
-    await saveBook(book);
-    renderHome();
-    showToast('✅ Progress saved');
-  }
+  await saveBook(book);
+  renderHome();
+  showToast('✅ Progress updated!');
 }
 
-// Auto-save on blur
-window.handlePageBlur = function(id) {
+window.handlePageUpdate = function(id) {
   const inp = document.getElementById('pi-' + id);
   if (!inp) return;
   const v = parseInt(inp.value);
   if (!isNaN(v)) updatePage(id, v);
 };
 
-function showCompletionToast(title) {
-  // Find book for stats
-  const book = books.find(b => b.title === title && b.status === 'completed');
-  const days = book ? daysBetween(book.startDate, book.endDate) : '—';
-  const pages = book ? book.totalPages : '—';
-  const doneCount = books.filter(b => b.status === 'completed' && new Date(b.endDate||'').getFullYear() === new Date().getFullYear()).length;
-
-  // Build overlay
-  let overlay = document.getElementById('_celebration_overlay');
-  if (!overlay) {
-    overlay = document.createElement('div');
-    overlay.id = '_celebration_overlay';
-    overlay.className = 'celebration-overlay';
-    document.body.appendChild(overlay);
-  }
-
-  overlay.innerHTML = `
-    <div class="celebration-card">
-      <span class="celebration-trophy">🏆</span>
-      <div class="celebration-title">Book Complete!</div>
-      <div class="celebration-subtitle">You finished</div>
-      <div class="celebration-book-title">${esc(title)}</div>
-      <div class="celebration-stats">
-        <div class="cel-stat">
-          <span class="cel-stat-num">${days}</span>
-          <span class="cel-stat-lbl">Days</span>
-        </div>
-        <div class="cel-stat">
-          <span class="cel-stat-num">${pages}</span>
-          <span class="cel-stat-lbl">Pages</span>
-        </div>
-        <div class="cel-stat">
-          <span class="cel-stat-num">${doneCount}</span>
-          <span class="cel-stat-lbl">This Year</span>
-        </div>
-      </div>
-      <div class="celebration-actions">
-        <button class="cel-btn-primary" id="_cel_ok">🎉 Awesome!</button>
-        <button class="cel-btn-undo" id="_cel_undo">Undo</button>
-      </div>
-    </div>`;
-
-  // Show with slight delay for effect
-  requestAnimationFrame(() => {
-    requestAnimationFrame(() => overlay.classList.add('show'));
-  });
-
-  spawnConfetti();
-
-  document.getElementById('_cel_ok').onclick = () => {
-    overlay.classList.remove('show');
-  };
-
-  document.getElementById('_cel_undo').onclick = async () => {
-    const b = books.find(b => b.title === title && b.status === 'completed');
-    if (b) {
-      b.status = 'reading';
-      b.endDate = null;
-      b.currentPage = b.totalPages - 1;
-      await saveBook(b);
-      updateGoalCard();
-      renderHome();
-    }
-    overlay.classList.remove('show');
-  };
-}
-
-function spawnConfetti() {
-  const colors = ['#34d399','#38bdf8','#fbbf24','#fb7185','#a78bfa','#ffffff'];
-  const shapes = ['2px', '4px', '6px'];
-  for (let i = 0; i < 80; i++) {
-    const el = document.createElement('div');
-    el.className = 'confetti-piece';
-    const color = colors[Math.floor(Math.random() * colors.length)];
-    const size = (4 + Math.random() * 8) + 'px';
-    const startX = Math.random() * 100;
-    const tx = (Math.random() - 0.5) * 200;
-    const rot = Math.random() * 1080;
-    const dur = 1.8 + Math.random() * 1.8;
-    const delay = Math.random() * 0.6;
-    el.style.cssText = `
-      left: ${startX}vw;
-      top: -10px;
-      width: ${size};
-      height: ${size};
-      background: ${color};
-      --tx: translateX(${tx}px);
-      --rot: ${rot}deg;
-      animation-duration: ${dur}s;
-      animation-delay: ${delay}s;
-      ${Math.random() > 0.5 ? 'border-radius: 50%;' : ''}
-    `;
-    document.body.appendChild(el);
-    setTimeout(() => el.remove(), (dur + delay + 0.5) * 1000);
-  }
-}
+// ---- Complete ----
+window.completeBook = async function(id) {
+  const book = books.find(b => b.id === id);
+  if (!book) return;
+  book.status = 'completed';
+  book.currentPage = book.totalPages;
+  book.endDate = todayStr();
+  await saveBook(book);
+  updateGoalCard();
+  renderHome();
+  showToast('🏆 Book completed! Amazing!');
+};
 
 // ---- Delete ----
 window.deleteBook = async function(id) {
@@ -1579,14 +1324,14 @@ window.deleteBook = async function(id) {
 
 // ---- Circular Progress SVG ----
 function circleProgressSVG(pct, color) {
-  const r = 48;
+  const r = 26;
   const circ = 2 * Math.PI * r;
   const dash = circ - (pct / 100) * circ;
   return `
-  <svg width="120" height="120" viewBox="0 0 120 120">
-    <circle class="circle-bg" cx="60" cy="60" r="${r}" />
+  <svg width="64" height="64" viewBox="0 0 64 64">
+    <circle class="circle-bg" cx="32" cy="32" r="${r}" />
     <circle class="circle-fill"
-      cx="60" cy="60" r="${r}"
+      cx="32" cy="32" r="${r}"
       stroke="${color}"
       stroke-dasharray="${circ}"
       stroke-dashoffset="${dash}"
@@ -1612,58 +1357,16 @@ async function fetchCoverURL(book) {
     }
   } catch(e) {}
 
-  // If using Firestore, try recovering cover from Firestore covers collection
-  if (!useLocal) {
-    try {
-      const doc = await db.collection('covers').doc(book.id).get();
-      if (doc.exists && doc.data().data) {
-        const url = doc.data().data;
-        coverCache[cacheKey] = url;
-        // Restore to localStorage so future loads are instant
-        try {
-          const stored = JSON.parse(localStorage.getItem('pageturn_covers') || '{}');
-          stored[book.id] = url;
-          localStorage.setItem('pageturn_covers', JSON.stringify(stored));
-        } catch(e) {}
-        return url;
-      }
-    } catch(e) { console.warn('Cover Firestore fetch failed:', e); }
-  }
-
-  // Try Google Books API first, then Open Library as fallback
-  const tryApis = async () => {
-    // 1. Google Books API
-    try {
-      const q = encodeURIComponent(`${book.title} ${book.author}`);
-      const res = await fetch(`https://www.googleapis.com/books/v1/volumes?q=${q}&maxResults=3`);
-      const data = await res.json();
-      let imgLinks = null;
-      for (const item of (data?.items || [])) {
-        const links = item?.volumeInfo?.imageLinks;
-        if (links) { imgLinks = links; break; }
-      }
-      if (imgLinks) {
-        const raw = imgLinks.extraLarge || imgLinks.large || imgLinks.medium || imgLinks.small || imgLinks.thumbnail || imgLinks.smallThumbnail || '';
-        const url = raw.replace('http:', 'https:').replace('&edge=curl', '');
-        if (url) return url;
-      }
-    } catch(e) {}
-
-    // 2. Open Library API (no CORS issues, reliable thumbnails)
-    try {
-      const q = encodeURIComponent(`${book.title} ${book.author}`);
-      const res = await fetch(`https://openlibrary.org/search.json?q=${q}&limit=3&fields=cover_i`);
-      const data = await res.json();
-      const coverId = data?.docs?.find(d => d.cover_i)?.cover_i;
-      if (coverId) return `https://covers.openlibrary.org/b/id/${coverId}-L.jpg`;
-    } catch(e) {}
-
-    return null;
-  };
-
+  // Fetch from Google Books API
   try {
-    const url = await tryApis();
+    const q = encodeURIComponent(`${book.title} ${book.author}`);
+    const res = await fetch(`https://www.googleapis.com/books/v1/volumes?q=${q}&maxResults=1&fields=items(volumeInfo(imageLinks))`);
+    const data = await res.json();
+    const img = data?.items?.[0]?.volumeInfo?.imageLinks;
+    // Prefer high-res, fall back to thumbnail
+    const url = (img?.extraLarge || img?.large || img?.medium || img?.thumbnail || '').replace('http:', 'https:');
     coverCache[cacheKey] = url || null;
+    // Cache to localStorage
     if (url) {
       try {
         const stored = JSON.parse(localStorage.getItem('pageturn_covers') || '{}');
@@ -1678,49 +1381,21 @@ async function fetchCoverURL(book) {
   }
 }
 
-// Pre-fetch covers for all books in parallel so coverThumb() can render them synchronously
-async function prefetchCovers(bookList) {
-  await Promise.all(bookList.map(async book => {
-    if (coverCache[book.id] !== undefined) return; // already cached
-    await fetchCoverURL(book);
-  }));
-}
-
-function makePlaceholder(book, placeholderClass, hidden=true) {
-  const color = CAT_COLORS[book.category] || '#38bdf8';
-  const words = (book.title || '?').trim().split(/\s+/);
-  const initials = words.length >= 2
-    ? (words[0][0] + words[words.length - 1][0]).toUpperCase()
-    : words[0].slice(0, 2).toUpperCase();
-  const displayStyle = hidden ? 'display:none;' : '';
-  return `<div class="${placeholderClass}" style="${displayStyle}--cover-color:${color}">
-    <span class="cover-initials">${initials}</span>
-    <span class="cover-title-text">${esc(book.title)}</span>
-  </div>`;
-}
-
 function coverThumb(book, cls, placeholderClass) {
+  const emoji = { 'Self Development':'🌱','Biography':'👤','Trading':'📈','Relationship':'❤️','Mindset':'🧠','Finance':'💰','Health':'💪' };
   // Use cached cover URL if available (sync check)
   const cached = coverCache[book.id] || book.cover ||
     (() => { try { return JSON.parse(localStorage.getItem('pageturn_covers') || '{}')[book.id]; } catch(e) { return null; } })();
 
   if (cached) {
-    return `<img src="${cached}" class="${cls}" alt="${esc(book.title)}"
-              loading="eager"
-              onload="this.nextElementSibling.style.display='none'"
-              onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"
-            />${makePlaceholder(book, placeholderClass)}`;
+    return `<img src="${cached}" class="${cls}" alt="${esc(book.title)}" onerror="this.style.display='none';this.nextSibling.style.display='flex'" loading="lazy" />
+            <div class="${placeholderClass}" style="display:none">${emoji[book.category] || '📗'}</div>`;
   }
   // Return placeholder first, then async-load cover and swap
   const uid = 'cv_' + book.id.replace(/[^a-z0-9]/gi, '_');
+  // Trigger async fetch after render
   setTimeout(() => fetchAndSwapCover(book, uid, cls, placeholderClass), 0);
-  const color = CAT_COLORS[book.category] || '#38bdf8';
-  const words = (book.title || '?').trim().split(/\s+/);
-  const initials = words.length >= 2 ? (words[0][0] + words[words.length-1][0]).toUpperCase() : words[0].slice(0,2).toUpperCase();
-  return `<div class="${placeholderClass}" id="${uid}" style="--cover-color:${color}">
-    <span class="cover-initials">${initials}</span>
-    <span class="cover-title-text">${esc(book.title)}</span>
-  </div>`;
+  return `<div class="${placeholderClass}" id="${uid}">${emoji[book.category] || '📗'}</div>`;
 }
 
 async function fetchAndSwapCover(book, uid, cls, placeholderClass) {
@@ -1729,15 +1404,15 @@ async function fetchAndSwapCover(book, uid, cls, placeholderClass) {
   const el = document.getElementById(uid);
   if (!el) return; // element no longer in DOM
   const img = document.createElement('img');
+  img.src = url;
   img.className = cls;
   img.alt = book.title;
-  img.loading = 'eager';
+  img.loading = 'lazy';
   img.style.opacity = '0';
   img.style.transition = 'opacity 0.3s ease';
-  img.onerror = () => { img.style.opacity = '1'; };
-  img.onload = () => { img.style.opacity = '1'; if (img.nextElementSibling) img.nextElementSibling.style.display = 'none'; };
+  img.onerror = () => img.remove();
+  img.onload = () => { img.style.opacity = '1'; };
   el.parentNode.replaceChild(img, el);
-  img.src = url;
 }
 
 // ---- Render Home ----
@@ -1768,7 +1443,6 @@ function renderHome() {
           </div>
           <div class="book-title-text">${esc(book.title)}</div>
           <div class="book-author-text">by ${esc(book.author)}</div>
-          ${book.startDate ? `<div class="last-read-label">📅 Day ${Math.max(1, Math.round((new Date() - new Date(book.startDate)) / 86400000) + 1)} of reading</div>` : ''}
           ${lastReadLabel(book) ? `<div class="last-read-label">🕐 Last read: ${lastReadLabel(book)}</div>` : ''}
         </div>
       </div>
@@ -1776,22 +1450,26 @@ function renderHome() {
       <div class="progress-row">
         <div class="circle-progress-wrap">
           ${circleProgressSVG(pct, color)}
-          <div class="circle-pct-label">${pct}%<small>done</small></div>
+          <div class="circle-pct-label">${pct}%</div>
         </div>
         <div class="page-update-col">
           <div class="page-update-row">
             <input type="number" class="page-input" id="pi-${book.id}"
-              value="${book.currentPage}" min="0" max="${book.totalPages}"
-              onblur="handlePageBlur('${book.id}')"
-              onkeydown="if(event.key==='Enter')this.blur()" />
+              value="${book.currentPage}" min="0" max="${book.totalPages}" />
             <span class="page-of">/ ${book.totalPages} pages</span>
+            <button class="update-btn" onclick="handlePageUpdate('${book.id}')">Update</button>
           </div>
+          <button class="complete-btn" onclick="completeBook('${book.id}')">✓ Mark Complete</button>
         </div>
       </div>
     </div>`;
   }).join('');
 
-
+  container.querySelectorAll('.page-input').forEach(inp => {
+    inp.addEventListener('keydown', e => {
+      if (e.key === 'Enter') handlePageUpdate(inp.id.replace('pi-', ''));
+    });
+  });
 }
 
 // ---- Render Library ----
@@ -1894,6 +1572,69 @@ function renderStats() {
   document.getElementById('stat-shortest-streak').textContent = streaks.current  > 0 ? streaks.current  + 'd' : '—';
 
   renderChart(done);
+  renderYearlyChart(done);
+  renderCategoryChart(done);
+}
+
+function renderYearlyChart(done) {
+  const container = document.getElementById('yearly-chart');
+  if (!container) return;
+  const years = {};
+  done.forEach(b => {
+    if (!b.endDate) return;
+    const yr = new Date(b.endDate).getFullYear();
+    years[yr] = (years[yr] || 0) + 1;
+  });
+  const keys = Object.keys(years).sort();
+  if (!keys.length) {
+    container.innerHTML = '<div style="color:var(--text3);text-align:center;padding:2rem;font-size:0.85rem;">No completed books yet</div>';
+    return;
+  }
+  const maxV = Math.max(...keys.map(k => years[k]), 1);
+  const H = 110;
+  container.innerHTML = '<div class="chart-bars">' + keys.map(yr => {
+    const v = years[yr];
+    const h = Math.round((v / maxV) * H);
+    return '<div class="chart-col">' +
+      '<div class="chart-val">' + v + '</div>' +
+      '<div class="chart-bar" style="height:' + h + 'px;background:linear-gradient(180deg,#a78bfa,#7c3aed)" data-val="' + v + '"></div>' +
+      '<div class="chart-month">' + yr + '</div>' +
+      '</div>';
+  }).join('') + '</div>';
+}
+
+function renderCategoryChart(done) {
+  const container = document.getElementById('category-chart');
+  if (!container) return;
+  const cats = {};
+  done.forEach(b => {
+    const cat = b.category || 'Other';
+    cats[cat] = (cats[cat] || 0) + 1;
+  });
+  const entries = Object.entries(cats).sort((a, b) => b[1] - a[1]);
+  if (!entries.length) {
+    container.innerHTML = '<div style="color:var(--text3);text-align:center;padding:2rem;font-size:0.85rem;">No completed books yet</div>';
+    return;
+  }
+  const maxV = entries[0][1];
+  const catColors = {
+    'Self Development': '#34d399', 'Biography': '#a78bfa', 'Trading': '#fbbf24',
+    'Relationship': '#fb7185', 'Mindset': '#38bdf8', 'Finance': '#34d399',
+    'Health': '#fb7185', 'Other': '#94a3b8'
+  };
+  container.innerHTML = '<div class="cat-chart">' + entries.map(function(entry) {
+    const cat = entry[0], count = entry[1];
+    const pct = Math.round((count / maxV) * 100);
+    const color = catColors[cat] || '#38bdf8';
+    return '<div class="cat-row">' +
+      '<div class="cat-row-label">' + cat + '</div>' +
+      '<div class="cat-bar-track">' +
+        '<div class="cat-bar-fill" style="width:' + pct + '%;background:' + color + '">' +
+          '<span class="cat-bar-count">' + count + '</span>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+  }).join('') + '</div>';
 }
 
 function calcStreaks() {
