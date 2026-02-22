@@ -208,15 +208,16 @@ body { font-family: var(--font-b); background: var(--bg); color: var(--text); mi
   background: var(--surface); border-radius: var(--radius-sm);
   padding: 0.75rem 1rem;
 }
-.circle-progress-wrap { position: relative; width: 58px; height: 58px; flex-shrink: 0; }
+.circle-progress-wrap { position: relative; width: 120px; height: 120px; flex-shrink: 0; }
 .circle-progress-wrap svg { transform: rotate(-90deg); }
-.circle-bg { fill: none; stroke: var(--surface3); stroke-width: 5; }
-.circle-fill { fill: none; stroke-width: 5; stroke-linecap: round; transition: stroke-dashoffset 0.6s ease; }
+.circle-bg { fill: none; stroke: var(--surface3); stroke-width: 7; }
+.circle-fill { fill: none; stroke-width: 7; stroke-linecap: round; transition: stroke-dashoffset 0.6s ease; }
 .circle-pct-label {
   position: absolute; inset: 0;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 0.7rem; font-weight: 800; color: var(--text);
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  font-size: 1.5rem; font-weight: 900; color: var(--text); line-height: 1;
 }
+.circle-pct-label small { font-size: 0.6rem; font-weight: 600; opacity: 0.5; margin-top: 2px; letter-spacing: 0.05em; }
 
 /* Page controls column */
 .page-update-col { flex: 1; display: flex; flex-direction: column; gap: 0.5rem; min-width: 0; }
@@ -327,12 +328,6 @@ body { font-family: var(--font-b); background: var(--bg); color: var(--text); mi
 }
 .chart-month { font-size: 0.62rem; color: var(--text3); letter-spacing: 0.05em; }
 .chart-val { font-size: 0.7rem; color: var(--text2); font-weight: 700; }
-.cat-chart { display: flex; flex-direction: column; gap: 0.8rem; }
-.cat-row { display: flex; align-items: center; gap: 0.75rem; }
-.cat-row-label { font-size: 0.72rem; font-weight: 700; color: var(--text2); width: 120px; flex-shrink: 0; text-align: right; }
-.cat-bar-track { flex: 1; height: 24px; background: var(--surface3); border-radius: 6px; overflow: hidden; }
-.cat-bar-fill { height: 100%; border-radius: 6px; transition: width 0.7s ease; display: flex; align-items: center; padding-left: 8px; min-width: 28px; }
-.cat-bar-count { font-size: 0.72rem; font-weight: 800; color: rgba(0,0,0,0.75); }
 
 /* ── Empty State ── */
 .empty-state { text-align: center; padding: 3rem 1rem; color: var(--text3); }
@@ -686,7 +681,11 @@ input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.5); cur
       <header class="page-header">
         <div><p class="page-sub">Your journey</p><h1 class="page-title">Statistics</h1></div>
       </header>
-      <div class="stats-grid">
+      <div class="section-label">Books Read by Year</div>
+      <div class="chart-wrap" id="yearly-chart"></div>
+      <div class="section-label" style="margin-top:1.5rem">Books by Category</div>
+      <div class="chart-wrap" id="category-chart"></div>
+      <div class="stats-grid" style="margin-top:1.5rem">
         <div class="stat-card hi"><div class="stat-val" id="stat-total">0</div><div class="stat-lbl">Books Read</div></div>
         <div class="stat-card"><div class="stat-val" id="stat-pending">0</div><div class="stat-lbl">In Progress</div></div>
         <div class="stat-card"><div class="stat-val" id="stat-avg-days">—</div><div class="stat-lbl">Avg Days/Book</div></div>
@@ -696,14 +695,8 @@ input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.5); cur
         <div class="stat-card"><div class="stat-val" id="stat-longest-streak">—</div><div class="stat-lbl">Best Streak</div></div>
         <div class="stat-card"><div class="stat-val" id="stat-shortest-streak">—</div><div class="stat-lbl">Current Streak</div></div>
       </div>
-      <div class="section-label" style="margin-top:2rem">Books per Month</div>
+      <div class="section-label" style="margin-top:1.5rem">Books per Month</div>
       <div class="chart-wrap" id="monthly-chart"></div>
-
-      <div class="section-label" style="margin-top:2rem">Books Read by Year</div>
-      <div class="chart-wrap" id="yearly-chart"></div>
-
-      <div class="section-label" style="margin-top:2rem">Books by Category</div>
-      <div class="chart-wrap" id="category-chart"></div>
     </section>
   </main>
 
@@ -1046,7 +1039,7 @@ function goTo(page) {
   document.querySelectorAll('[data-page]').forEach(l => l.classList.remove('active'));
   document.getElementById('page-' + page).classList.add('active');
   document.querySelectorAll(`[data-page="${page}"]`).forEach(l => l.classList.add('active'));
-  sessionStorage.setItem('pageturn_page', page);
+  sessionStorage.setItem('pt_page', page);
   if (page === 'home')    renderHome();
   if (page === 'library') renderLibrary();
   if (page === 'history') renderHistory();
@@ -1059,23 +1052,19 @@ async function loadData() {
     const d = lsLoad();
     books = d.books || [];
     goal  = d.goal  || { year: new Date().getFullYear(), target: 20 };
-    const savedPage = sessionStorage.getItem('pageturn_page') || 'home';
-    goTo(savedPage);
+    goTo(sessionStorage.getItem('pt_page') || 'home');
   } else {
     try {
       // Load goal once
       const gs = await db.collection('settings').doc('goal').get();
       if (gs.exists) goal = gs.data();
 
-      // Restore last visited page before first render
-      const _savedPage = sessionStorage.getItem('pageturn_page') || 'home';
+      // Restore last visited page before data arrives
+      const _sp = sessionStorage.getItem('pt_page') || 'home';
       document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
       document.querySelectorAll('[data-page]').forEach(l => l.classList.remove('active'));
-      const _pageEl = document.getElementById('page-' + _savedPage);
-      if (_pageEl) {
-        _pageEl.classList.add('active');
-        document.querySelectorAll(`[data-page="${_savedPage}"]`).forEach(l => l.classList.add('active'));
-      }
+      const _pe = document.getElementById('page-' + _sp);
+      if (_pe) { _pe.classList.add('active'); document.querySelectorAll('[data-page="'+_sp+'"]').forEach(l=>l.classList.add('active')); }
 
       // Real-time listener for books — auto-syncs across all devices
       db.collection('books').onSnapshot(snapshot => {
@@ -1083,9 +1072,9 @@ async function loadData() {
         books = snapshot.docs.map(d => ({
           id: d.id,
           ...d.data(),
-          cover: covers[d.id] || null  // restore cover from local cache
+          cover: covers[d.id] || null
         }));
-        // Render immediately — no waiting for cover prefetch
+        // Render immediately — no blocking prefetch
         const activePage = document.querySelector('.page.active')?.id?.replace('page-','');
         if (activePage === 'home')    renderHome();
         if (activePage === 'library') renderLibrary();
@@ -1293,6 +1282,13 @@ async function updatePage(bookId, newPage) {
   showToast('✅ Progress updated!');
 }
 
+window.handlePageBlur = function(id) {
+  const inp = document.getElementById('pi-' + id);
+  if (!inp) return;
+  const v = parseInt(inp.value);
+  if (!isNaN(v)) updatePage(id, v);
+};
+
 window.handlePageUpdate = function(id) {
   const inp = document.getElementById('pi-' + id);
   if (!inp) return;
@@ -1324,14 +1320,14 @@ window.deleteBook = async function(id) {
 
 // ---- Circular Progress SVG ----
 function circleProgressSVG(pct, color) {
-  const r = 26;
+  const r = 48;
   const circ = 2 * Math.PI * r;
   const dash = circ - (pct / 100) * circ;
   return `
-  <svg width="64" height="64" viewBox="0 0 64 64">
-    <circle class="circle-bg" cx="32" cy="32" r="${r}" />
+  <svg width="120" height="120" viewBox="0 0 120 120">
+    <circle class="circle-bg" cx="60" cy="60" r="${r}" />
     <circle class="circle-fill"
-      cx="32" cy="32" r="${r}"
+      cx="60" cy="60" r="${r}"
       stroke="${color}"
       stroke-dasharray="${circ}"
       stroke-dashoffset="${dash}"
@@ -1431,6 +1427,7 @@ function renderHome() {
     const color = CAT_COLORS[book.category] || '#38bdf8';
     const catClass = 'cat-' + (book.category || '').replace(/ /g, '\\ ');
 
+    const daysReading = book.startDate ? Math.max(1, Math.round((new Date() - new Date(book.startDate)) / 86400000) + 1) : null;
     return `
     <div class="book-card">
       <!-- Top: cover + info -->
@@ -1443,33 +1440,30 @@ function renderHome() {
           </div>
           <div class="book-title-text">${esc(book.title)}</div>
           <div class="book-author-text">by ${esc(book.author)}</div>
-          ${lastReadLabel(book) ? `<div class="last-read-label">🕐 Last read: ${lastReadLabel(book)}</div>` : ''}
+          ${daysReading ? `<div class="last-read-label">📅 Day ${daysReading} of reading</div>` : ''}
+          ${lastReadLabel(book) ? `<div class="last-read-label">🕐 ${lastReadLabel(book)}</div>` : ''}
         </div>
       </div>
-      <!-- Bottom: progress + controls full width -->
+      <!-- Bottom: big progress circle + page input -->
       <div class="progress-row">
         <div class="circle-progress-wrap">
           ${circleProgressSVG(pct, color)}
-          <div class="circle-pct-label">${pct}%</div>
+          <div class="circle-pct-label">${pct}%<small>done</small></div>
         </div>
         <div class="page-update-col">
           <div class="page-update-row">
             <input type="number" class="page-input" id="pi-${book.id}"
-              value="${book.currentPage}" min="0" max="${book.totalPages}" />
+              value="${book.currentPage}" min="0" max="${book.totalPages}"
+              onblur="handlePageBlur('${book.id}')"
+              onkeydown="if(event.key==='Enter')this.blur()" />
             <span class="page-of">/ ${book.totalPages} pages</span>
-            <button class="update-btn" onclick="handlePageUpdate('${book.id}')">Update</button>
           </div>
-          <button class="complete-btn" onclick="completeBook('${book.id}')">✓ Mark Complete</button>
         </div>
       </div>
     </div>`;
   }).join('');
 
-  container.querySelectorAll('.page-input').forEach(inp => {
-    inp.addEventListener('keydown', e => {
-      if (e.key === 'Enter') handlePageUpdate(inp.id.replace('pi-', ''));
-    });
-  });
+  // Auto-save handled by onblur on each input
 }
 
 // ---- Render Library ----
@@ -1586,20 +1580,13 @@ function renderYearlyChart(done) {
     years[yr] = (years[yr] || 0) + 1;
   });
   const keys = Object.keys(years).sort();
-  if (!keys.length) {
-    container.innerHTML = '<div style="color:var(--text3);text-align:center;padding:2rem;font-size:0.85rem;">No completed books yet</div>';
-    return;
-  }
+  if (!keys.length) { container.innerHTML = '<div style="color:var(--text3);text-align:center;padding:2rem;font-size:0.85rem;">No completed books yet</div>'; return; }
   const maxV = Math.max(...keys.map(k => years[k]), 1);
   const H = 110;
   container.innerHTML = '<div class="chart-bars">' + keys.map(yr => {
     const v = years[yr];
     const h = Math.round((v / maxV) * H);
-    return '<div class="chart-col">' +
-      '<div class="chart-val">' + v + '</div>' +
-      '<div class="chart-bar" style="height:' + h + 'px;background:linear-gradient(180deg,#a78bfa,#7c3aed)" data-val="' + v + '"></div>' +
-      '<div class="chart-month">' + yr + '</div>' +
-      '</div>';
+    return '<div class="chart-col"><div class="chart-val">' + v + '</div><div class="chart-bar" style="height:' + h + 'px;background:linear-gradient(180deg,#a78bfa,#7c3aed)" data-val="' + v + '"></div><div class="chart-month">' + yr + '</div></div>';
   }).join('') + '</div>';
 }
 
@@ -1607,33 +1594,14 @@ function renderCategoryChart(done) {
   const container = document.getElementById('category-chart');
   if (!container) return;
   const cats = {};
-  done.forEach(b => {
-    const cat = b.category || 'Other';
-    cats[cat] = (cats[cat] || 0) + 1;
-  });
+  done.forEach(b => { const c = b.category || 'Other'; cats[c] = (cats[c] || 0) + 1; });
   const entries = Object.entries(cats).sort((a, b) => b[1] - a[1]);
-  if (!entries.length) {
-    container.innerHTML = '<div style="color:var(--text3);text-align:center;padding:2rem;font-size:0.85rem;">No completed books yet</div>';
-    return;
-  }
+  if (!entries.length) { container.innerHTML = '<div style="color:var(--text3);text-align:center;padding:2rem;font-size:0.85rem;">No completed books yet</div>'; return; }
   const maxV = entries[0][1];
-  const catColors = {
-    'Self Development': '#34d399', 'Biography': '#a78bfa', 'Trading': '#fbbf24',
-    'Relationship': '#fb7185', 'Mindset': '#38bdf8', 'Finance': '#34d399',
-    'Health': '#fb7185', 'Other': '#94a3b8'
-  };
-  container.innerHTML = '<div class="cat-chart">' + entries.map(function(entry) {
-    const cat = entry[0], count = entry[1];
-    const pct = Math.round((count / maxV) * 100);
-    const color = catColors[cat] || '#38bdf8';
-    return '<div class="cat-row">' +
-      '<div class="cat-row-label">' + cat + '</div>' +
-      '<div class="cat-bar-track">' +
-        '<div class="cat-bar-fill" style="width:' + pct + '%;background:' + color + '">' +
-          '<span class="cat-bar-count">' + count + '</span>' +
-        '</div>' +
-      '</div>' +
-    '</div>';
+  const clr = {'Self Development':'#34d399','Biography':'#a78bfa','Trading':'#fbbf24','Relationship':'#fb7185','Mindset':'#38bdf8','Finance':'#34d399','Health':'#fb7185','Other':'#94a3b8'};
+  container.innerHTML = '<div class="cat-chart">' + entries.map(function(e) {
+    const cat=e[0], cnt=e[1], pct=Math.round((cnt/maxV)*100), col=clr[cat]||'#38bdf8';
+    return '<div class="cat-row"><div class="cat-row-label">'+cat+'</div><div class="cat-bar-track"><div class="cat-bar-fill" style="width:'+pct+'%;background:'+col+'"><span class="cat-bar-count">'+cnt+'</span></div></div></div>';
   }).join('') + '</div>';
 }
 
