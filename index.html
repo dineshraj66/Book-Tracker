@@ -1686,13 +1686,14 @@ async function prefetchCovers(bookList) {
   }));
 }
 
-function makePlaceholder(book, placeholderClass) {
+function makePlaceholder(book, placeholderClass, hidden=true) {
   const color = CAT_COLORS[book.category] || '#38bdf8';
   const words = (book.title || '?').trim().split(/\s+/);
   const initials = words.length >= 2
     ? (words[0][0] + words[words.length - 1][0]).toUpperCase()
     : words[0].slice(0, 2).toUpperCase();
-  return `<div class="${placeholderClass}" style="--cover-color:${color}">
+  const displayStyle = hidden ? 'display:none;' : '';
+  return `<div class="${placeholderClass}" style="${displayStyle}--cover-color:${color}">
     <span class="cover-initials">${initials}</span>
     <span class="cover-title-text">${esc(book.title)}</span>
   </div>`;
@@ -1706,6 +1707,7 @@ function coverThumb(book, cls, placeholderClass) {
   if (cached) {
     return `<img src="${cached}" class="${cls}" alt="${esc(book.title)}"
               loading="eager"
+              onload="this.nextElementSibling.style.display='none'"
               onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"
             />${makePlaceholder(book, placeholderClass)}`;
   }
@@ -1733,7 +1735,7 @@ async function fetchAndSwapCover(book, uid, cls, placeholderClass) {
   img.style.opacity = '0';
   img.style.transition = 'opacity 0.3s ease';
   img.onerror = () => { img.style.opacity = '1'; };
-  img.onload = () => { img.style.opacity = '1'; };
+  img.onload = () => { img.style.opacity = '1'; if (img.nextElementSibling) img.nextElementSibling.style.display = 'none'; };
   el.parentNode.replaceChild(img, el);
   img.src = url;
 }
