@@ -1143,11 +1143,12 @@ function setupNav() {
   });
 }
 
-function goTo(page) {
+async function goTo(page) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('[data-page]').forEach(l => l.classList.remove('active'));
   document.getElementById('page-' + page).classList.add('active');
   document.querySelectorAll(`[data-page="${page}"]`).forEach(l => l.classList.add('active'));
+  await prefetchCovers(books);
   if (page === 'home')    renderHome();
   if (page === 'library') renderLibrary();
   if (page === 'history') renderHistory();
@@ -1160,6 +1161,7 @@ async function loadData() {
     const d = lsLoad();
     books = d.books || [];
     goal  = d.goal  || { year: new Date().getFullYear(), target: 20 };
+    await prefetchCovers(books);
     renderHome();
   } else {
     try {
@@ -1168,13 +1170,15 @@ async function loadData() {
       if (gs.exists) goal = gs.data();
 
       // Real-time listener for books — auto-syncs across all devices
-      db.collection('books').onSnapshot(snapshot => {
+      db.collection('books').onSnapshot(async snapshot => {
         const covers = JSON.parse(localStorage.getItem('pageturn_covers') || '{}');
         books = snapshot.docs.map(d => ({
           id: d.id,
           ...d.data(),
           cover: covers[d.id] || null  // restore cover from local cache
         }));
+        // Pre-fetch all covers into cache before rendering so coverThumb() works synchronously
+        await prefetchCovers(books);
         // Re-render whichever page is active
         const activePage = document.querySelector('.page.active')?.id?.replace('page-','');
         if (activePage === 'home')    renderHome();
@@ -1602,6 +1606,14 @@ async function fetchCoverURL(book) {
     coverCache[cacheKey] = null;
     return null;
   }
+}
+
+// Pre-fetch covers for all books in parallel so coverThumb() can render them synchronously
+async function prefetchCovers(bookList) {
+  await Promise.all(bookList.map(async book => {
+    if (coverCache[book.id] !== undefined) return; // already cached
+    await fetchCoverURL(book);
+  }));
 }
 
 function coverThumb(book, cls, placeholderClass) {
