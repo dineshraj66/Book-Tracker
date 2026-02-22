@@ -1576,11 +1576,18 @@ async function fetchCoverURL(book) {
   // Fetch from Google Books API
   try {
     const q = encodeURIComponent(`${book.title} ${book.author}`);
-    const res = await fetch(`https://www.googleapis.com/books/v1/volumes?q=${q}&maxResults=1&fields=items(volumeInfo(imageLinks))`);
+    const res = await fetch(`https://www.googleapis.com/books/v1/volumes?q=${q}&maxResults=3`);
     const data = await res.json();
-    const img = data?.items?.[0]?.volumeInfo?.imageLinks;
-    // Prefer high-res, fall back to thumbnail
-    const url = (img?.extraLarge || img?.large || img?.medium || img?.thumbnail || '').replace('http:', 'https:');
+    // Try to find a result that has image links
+    let imgLinks = null;
+    for (const item of (data?.items || [])) {
+      const links = item?.volumeInfo?.imageLinks;
+      if (links) { imgLinks = links; break; }
+    }
+    const img = imgLinks;
+    // Prefer high-res, fall back to thumbnail; ensure https
+    const raw = img?.extraLarge || img?.large || img?.medium || img?.small || img?.thumbnail || img?.smallThumbnail || '';
+    const url = raw.replace('http:', 'https:').replace('&edge=curl', '');
     coverCache[cacheKey] = url || null;
     // Cache to localStorage
     if (url) {
@@ -1620,15 +1627,17 @@ async function fetchAndSwapCover(book, uid, cls, placeholderClass) {
   const el = document.getElementById(uid);
   if (!el) return; // element no longer in DOM
   const img = document.createElement('img');
-  img.src = url;
   img.className = cls;
   img.alt = book.title;
   img.loading = 'lazy';
   img.style.opacity = '0';
   img.style.transition = 'opacity 0.3s ease';
-  img.onerror = () => img.remove();
+  // Assign handlers BEFORE setting src to avoid race condition where
+  // cached images fire onload before the handler is attached
+  img.onerror = () => { img.style.opacity = '1'; }; // show broken img placeholder
   img.onload = () => { img.style.opacity = '1'; };
   el.parentNode.replaceChild(img, el);
+  img.src = url; // set src last so onload is guaranteed to fire
 }
 
 // ---- Render Home ----
@@ -1659,6 +1668,7 @@ function renderHome() {
           </div>
           <div class="book-title-text">${esc(book.title)}</div>
           <div class="book-author-text">by ${esc(book.author)}</div>
+          ${book.startDate ? `<div class="last-read-label">📅 Day ${Math.max(1, Math.round((new Date() - new Date(book.startDate)) / 86400000) + 1)} of reading</div>` : ''}
           ${lastReadLabel(book) ? `<div class="last-read-label">🕐 Last read: ${lastReadLabel(book)}</div>` : ''}
         </div>
       </div>
@@ -1676,7 +1686,6 @@ function renderHome() {
               onkeydown="if(event.key==='Enter')this.blur()" />
             <span class="page-of">/ ${book.totalPages} pages</span>
           </div>
-          <div class="page-hint">Tap outside to save · Last page auto-completes 🎉</div>
         </div>
       </div>
     </div>`;
