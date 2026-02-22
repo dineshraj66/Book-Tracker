@@ -1612,23 +1612,40 @@ async function fetchCoverURL(book) {
     } catch(e) { console.warn('Cover Firestore fetch failed:', e); }
   }
 
-  // Fetch from Google Books API
+  // Try Google Books API first, then Open Library as fallback
+  const tryApis = async () => {
+    // 1. Google Books API
+    try {
+      const q = encodeURIComponent(`${book.title} ${book.author}`);
+      const res = await fetch(`https://www.googleapis.com/books/v1/volumes?q=${q}&maxResults=3`);
+      const data = await res.json();
+      let imgLinks = null;
+      for (const item of (data?.items || [])) {
+        const links = item?.volumeInfo?.imageLinks;
+        if (links) { imgLinks = links; break; }
+      }
+      if (imgLinks) {
+        const raw = imgLinks.extraLarge || imgLinks.large || imgLinks.medium || imgLinks.small || imgLinks.thumbnail || imgLinks.smallThumbnail || '';
+        const url = raw.replace('http:', 'https:').replace('&edge=curl', '');
+        if (url) return url;
+      }
+    } catch(e) {}
+
+    // 2. Open Library API (no CORS issues, reliable thumbnails)
+    try {
+      const q = encodeURIComponent(`${book.title} ${book.author}`);
+      const res = await fetch(`https://openlibrary.org/search.json?q=${q}&limit=3&fields=cover_i`);
+      const data = await res.json();
+      const coverId = data?.docs?.find(d => d.cover_i)?.cover_i;
+      if (coverId) return `https://covers.openlibrary.org/b/id/${coverId}-L.jpg`;
+    } catch(e) {}
+
+    return null;
+  };
+
   try {
-    const q = encodeURIComponent(`${book.title} ${book.author}`);
-    const res = await fetch(`https://www.googleapis.com/books/v1/volumes?q=${q}&maxResults=3`);
-    const data = await res.json();
-    // Try to find a result that has image links
-    let imgLinks = null;
-    for (const item of (data?.items || [])) {
-      const links = item?.volumeInfo?.imageLinks;
-      if (links) { imgLinks = links; break; }
-    }
-    const img = imgLinks;
-    // Prefer high-res, fall back to thumbnail; ensure https
-    const raw = img?.extraLarge || img?.large || img?.medium || img?.small || img?.thumbnail || img?.smallThumbnail || '';
-    const url = raw.replace('http:', 'https:').replace('&edge=curl', '');
+    const url = await tryApis();
     coverCache[cacheKey] = url || null;
-    // Cache to localStorage
     if (url) {
       try {
         const stored = JSON.parse(localStorage.getItem('pageturn_covers') || '{}');
@@ -1653,13 +1670,17 @@ async function prefetchCovers(bookList) {
 
 function coverThumb(book, cls, placeholderClass) {
   const emoji = { 'Self Development':'🌱','Biography':'👤','Trading':'📈','Relationship':'❤️','Mindset':'🧠','Finance':'💰','Health':'💪' };
+  const ph = emoji[book.category] || '📗';
   // Use cached cover URL if available (sync check)
   const cached = coverCache[book.id] || book.cover ||
     (() => { try { return JSON.parse(localStorage.getItem('pageturn_covers') || '{}')[book.id]; } catch(e) { return null; } })();
 
   if (cached) {
-    return `<img src="${cached}" class="${cls}" alt="${esc(book.title)}" onerror="this.style.display='none';this.nextSibling.style.display='flex'" loading="lazy" />
-            <div class="${placeholderClass}" style="display:none">${emoji[book.category] || '📗'}</div>`;
+    // Use eager loading and inline onerror that shows placeholder div
+    return `<img src="${cached}" class="${cls}" alt="${esc(book.title)}"
+              loading="eager"
+              onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"
+            /><div class="${placeholderClass}" style="display:none">${ph}</div>`;
   }
   // Return placeholder first, then async-load cover and swap
   const uid = 'cv_' + book.id.replace(/[^a-z0-9]/gi, '_');
@@ -1676,15 +1697,13 @@ async function fetchAndSwapCover(book, uid, cls, placeholderClass) {
   const img = document.createElement('img');
   img.className = cls;
   img.alt = book.title;
-  img.loading = 'lazy';
+  img.loading = 'eager';
   img.style.opacity = '0';
   img.style.transition = 'opacity 0.3s ease';
-  // Assign handlers BEFORE setting src to avoid race condition where
-  // cached images fire onload before the handler is attached
-  img.onerror = () => { img.style.opacity = '1'; }; // show broken img placeholder
+  img.onerror = () => { img.style.opacity = '1'; };
   img.onload = () => { img.style.opacity = '1'; };
   el.parentNode.replaceChild(img, el);
-  img.src = url; // set src last so onload is guaranteed to fire
+  img.src = url;
 }
 
 // ---- Render Home ----
