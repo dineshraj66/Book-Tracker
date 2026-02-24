@@ -1278,10 +1278,23 @@ async function updatePage(bookId, newPage) {
   if (!book) return;
   newPage = Math.max(0, Math.min(newPage, book.totalPages));
   book.currentPage = newPage;
-  book.lastUpdated = new Date().toISOString(); // save full timestamp
+  book.lastUpdated = new Date().toISOString();
   const today = todayStr();
   const log = book.pageLogs.find(l => l.date === today);
   if (log) log.page = newPage; else book.pageLogs.push({ date: today, page: newPage });
+
+  // Auto-complete when last page is reached
+  if (book.totalPages > 0 && newPage >= book.totalPages) {
+    book.status = 'completed';
+    book.endDate = today;
+    await saveBook(book);
+    updateGoalCard();
+    renderHome();
+    renderHistory();
+    showToast('🏆 Book completed! Amazing!');
+    return;
+  }
+
   await saveBook(book);
   renderHome();
   showToast('✅ Progress updated!');
@@ -1467,7 +1480,7 @@ function renderHome() {
     </div>`;
   }).join('');
 
-  // page input saves on blur (onblur attribute on each input)
+  // page input saves on blur
 }
 
 // ---- Render Library ----
