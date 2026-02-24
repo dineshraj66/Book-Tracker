@@ -104,7 +104,7 @@ body { font-family: var(--font-b); background: var(--bg); color: var(--text); mi
 .page { display: none; }
 .page.active { display: block; animation: fadeUp 0.3s ease both; }
 @keyframes fadeUp { from { opacity:0; transform:translateY(14px); } to { opacity:1; transform:translateY(0); } }
-@keyframes confettiFall { 0% { transform: translateY(0) rotate(0deg); opacity:1; } 100% { transform: translateY(105vh) rotate(720deg); opacity:0; } }
+@keyframes confettiFall { 0%{transform:translateY(0) rotate(0deg);opacity:1} 100%{transform:translateY(105vh) rotate(720deg);opacity:0} }
 
 /* ── Page Header ── */
 .page-header { margin-bottom: 1.75rem; }
@@ -216,10 +216,16 @@ body { font-family: var(--font-b); background: var(--bg); color: var(--text); mi
 .circle-pct-label {
   position: absolute; inset: 0;
   display: flex; flex-direction: column; align-items: center; justify-content: center;
-  font-size: 1.15rem; font-weight: 900; color: var(--text); line-height: 1;
+  font-size: 1.1rem; font-weight: 900; color: var(--text); line-height:1;
 }
-.circle-pct-label small { font-size: 0.55rem; font-weight: 600; opacity: 0.5; margin-top: 2px; }
-.page-hint { font-size: 0.65rem; color: var(--text3); margin-top: 0.4rem; opacity: 0.7; }
+.circle-pct-label small { font-size:0.52rem; font-weight:600; opacity:0.5; margin-top:2px; }
+.page-hint { font-size:0.65rem; color:var(--text3); margin-top:0.4rem; opacity:0.7; }
+.cat-chart { display:flex; flex-direction:column; gap:0.75rem; }
+.cat-row { display:flex; align-items:center; gap:0.75rem; }
+.cat-row-label { font-size:0.72rem; font-weight:700; color:var(--text2); width:130px; flex-shrink:0; text-align:right; }
+.cat-bar-track { flex:1; height:24px; background:var(--surface3); border-radius:6px; overflow:hidden; }
+.cat-bar-fill { height:100%; border-radius:6px; transition:width 0.7s ease; display:flex; align-items:center; padding-left:8px; min-width:28px; }
+.cat-bar-count { font-size:0.72rem; font-weight:800; color:rgba(0,0,0,0.75); }
 
 /* Page controls column */
 .page-update-col { flex: 1; display: flex; flex-direction: column; gap: 0.5rem; min-width: 0; }
@@ -683,7 +689,11 @@ input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.5); cur
       <header class="page-header">
         <div><p class="page-sub">Your journey</p><h1 class="page-title">Statistics</h1></div>
       </header>
-      <div class="stats-grid">
+      <div class="section-label">Books Read by Year</div>
+      <div class="chart-wrap" id="yearly-chart"></div>
+      <div class="section-label" style="margin-top:1.5rem">Books by Category</div>
+      <div class="chart-wrap" id="category-chart"></div>
+      <div class="stats-grid" style="margin-top:1.5rem">
         <div class="stat-card hi"><div class="stat-val" id="stat-total">0</div><div class="stat-lbl">Books Read</div></div>
         <div class="stat-card"><div class="stat-val" id="stat-pending">0</div><div class="stat-lbl">In Progress</div></div>
         <div class="stat-card"><div class="stat-val" id="stat-avg-days">—</div><div class="stat-lbl">Avg Days/Book</div></div>
@@ -693,7 +703,7 @@ input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.5); cur
         <div class="stat-card"><div class="stat-val" id="stat-longest-streak">—</div><div class="stat-lbl">Best Streak</div></div>
         <div class="stat-card"><div class="stat-val" id="stat-shortest-streak">—</div><div class="stat-lbl">Current Streak</div></div>
       </div>
-      <div class="section-label" style="margin-top:2rem">Books per Month</div>
+      <div class="section-label" style="margin-top:1.5rem">Books per Month</div>
       <div class="chart-wrap" id="monthly-chart"></div>
     </section>
   </main>
@@ -1037,6 +1047,7 @@ function goTo(page) {
   document.querySelectorAll('[data-page]').forEach(l => l.classList.remove('active'));
   document.getElementById('page-' + page).classList.add('active');
   document.querySelectorAll(`[data-page="${page}"]`).forEach(l => l.classList.add('active'));
+  sessionStorage.setItem('pt_page', page);
   if (page === 'home')    renderHome();
   if (page === 'library') renderLibrary();
   if (page === 'history') renderHistory();
@@ -1049,26 +1060,40 @@ async function loadData() {
     const d = lsLoad();
     books = d.books || [];
     goal  = d.goal  || { year: new Date().getFullYear(), target: 20 };
-    renderHome();
+    goTo(sessionStorage.getItem('pt_page') || 'home');
   } else {
     try {
       // Load goal once
       const gs = await db.collection('settings').doc('goal').get();
       if (gs.exists) goal = gs.data();
 
-      // Real-time listener for books — auto-syncs across all devices
+      // Restore saved page before first render
+      const _savedPage = sessionStorage.getItem('pt_page') || 'home';
+      document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+      document.querySelectorAll('[data-page]').forEach(l => l.classList.remove('active'));
+      const _pe = document.getElementById('page-' + _savedPage);
+      if (_pe) { _pe.classList.add('active'); document.querySelectorAll(`[data-page="${_savedPage}"]`).forEach(l => l.classList.add('active')); }
+
       db.collection('books').onSnapshot(snapshot => {
         const covers = JSON.parse(localStorage.getItem('pageturn_covers') || '{}');
         books = snapshot.docs.map(d => ({
           id: d.id,
           ...d.data(),
-          cover: covers[d.id] || null  // restore cover from local cache
+          cover: covers[d.id] || null
         }));
+        // Auto-fix stuck books (currentPage >= totalPages but status still reading)
+        books.forEach(async b => {
+          if (b.status === 'reading' && b.totalPages > 0 && b.currentPage >= b.totalPages) {
+            b.status = 'completed';
+            b.endDate = b.endDate || todayStr();
+            await saveBook(b);
+          }
+        });
         const activePage = document.querySelector('.page.active')?.id?.replace('page-','');
-        if (activePage === 'home')    { renderHome(); renderHistory(); }
-        else if (activePage === 'library') renderLibrary();
+        if (activePage === 'home')         { renderHome(); renderHistory(); }
+        else if (activePage === 'library') { renderLibrary(); }
         else if (activePage === 'history') { renderHistory(); renderHome(); }
-        else if (activePage === 'stats')   renderStats();
+        else if (activePage === 'stats')   { renderStats(); }
         updateGoalCard();
       }, err => {
         console.error('Firestore listener failed:', err);
@@ -1224,7 +1249,8 @@ function closeGoalModal() {
   document.getElementById('goal-modal-overlay').classList.remove('open');
 }
 function updateGoalCard() {
-  const done = books.filter(b => b.status === 'completed' && new Date(b.endDate || '').getFullYear() === goal.year).length;
+  const currentYear = new Date().getFullYear();
+  const done = books.filter(b => b.status === 'completed' && new Date(b.endDate || '').getFullYear() === currentYear).length;
   const pct  = goal.target > 0 ? Math.min(100, (done / goal.target) * 100) : 0;
   document.getElementById('goal-year').textContent      = goal.year;
   document.getElementById('goal-completed').textContent = String(done).padStart(2, '0');
@@ -1288,7 +1314,6 @@ window.handlePageBlur = function(id) {
   if (!isNaN(v)) updatePage(id, v);
 };
 
-// ---- Complete (manual via edit modal) ----
 window.completeBook = async function(id) {
   const book = books.find(b => b.id === id);
   if (!book) return;
@@ -1306,37 +1331,31 @@ function spawnConfetti() {
   const colors = ['#f59e0b','#10b981','#3b82f6','#ec4899','#8b5cf6','#ef4444'];
   for (let i = 0; i < 80; i++) {
     const el = document.createElement('div');
-    const color = colors[Math.floor(Math.random() * colors.length)];
     const size = Math.random() * 8 + 6;
-    el.style.cssText = `position:fixed;top:-10px;left:${Math.random()*100}vw;width:${size}px;height:${size}px;background:${color};border-radius:${Math.random()>0.5?'50%':'2px'};z-index:10000;pointer-events:none;animation:confettiFall ${1.5+Math.random()*2}s ease-in forwards`;
-    el.style.animationDelay = Math.random() * 0.8 + 's';
+    el.style.cssText = `position:fixed;top:-10px;left:${Math.random()*100}vw;width:${size}px;height:${size}px;background:${colors[Math.floor(Math.random()*colors.length)]};border-radius:${Math.random()>0.5?'50%':'2px'};z-index:10000;pointer-events:none;animation:confettiFall ${1.5+Math.random()*2}s ease-in forwards;animation-delay:${Math.random()*0.8}s`;
     document.body.appendChild(el);
     setTimeout(() => el.remove(), 4000);
   }
 }
 
 function showCelebration(book) {
-  const pagesRead = book.totalPages || 0;
   const days = book.startDate ? Math.max(1, Math.round((new Date() - new Date(book.startDate)) / 86400000) + 1) : null;
   const overlay = document.createElement('div');
-  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:9999;display:flex;align-items:center;justify-content:center;animation:fadeIn 0.3s ease';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:9999;display:flex;align-items:center;justify-content:center';
   overlay.innerHTML = `
-    <div style="background:var(--surface2);border-radius:24px;padding:2.5rem 2rem;text-align:center;max-width:320px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,0.5);position:relative">
+    <div style="background:var(--surface2);border-radius:24px;padding:2.5rem 2rem;text-align:center;max-width:320px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,0.5)">
       <div style="font-size:4rem;margin-bottom:0.5rem">🏆</div>
       <div style="font-size:1.4rem;font-weight:900;color:var(--accent);margin-bottom:0.25rem">Book Completed!</div>
       <div style="font-size:1rem;font-weight:700;color:var(--text);margin-bottom:0.25rem">${esc(book.title)}</div>
       <div style="font-size:0.85rem;color:var(--text3);margin-bottom:1.25rem">by ${esc(book.author)}</div>
       <div style="display:flex;gap:1rem;justify-content:center;margin-bottom:1.5rem">
         <div style="background:var(--surface3);border-radius:12px;padding:0.75rem 1.25rem">
-          <div style="font-size:1.3rem;font-weight:900;color:var(--accent)">${pagesRead}</div>
+          <div style="font-size:1.3rem;font-weight:900;color:var(--accent)">${book.totalPages}</div>
           <div style="font-size:0.65rem;color:var(--text3);text-transform:uppercase;letter-spacing:0.05em">Pages</div>
         </div>
-        ${days ? `<div style="background:var(--surface3);border-radius:12px;padding:0.75rem 1.25rem">
-          <div style="font-size:1.3rem;font-weight:900;color:var(--accent)">${days}</div>
-          <div style="font-size:0.65rem;color:var(--text3);text-transform:uppercase;letter-spacing:0.05em">Days</div>
-        </div>` : ''}
+        ${days ? `<div style="background:var(--surface3);border-radius:12px;padding:0.75rem 1.25rem"><div style="font-size:1.3rem;font-weight:900;color:var(--accent)">${days}</div><div style="font-size:0.65rem;color:var(--text3);text-transform:uppercase;letter-spacing:0.05em">Days</div></div>` : ''}
       </div>
-      <button onclick="this.closest('div[style*=fixed]').remove()" style="background:var(--accent);color:#000;border:none;border-radius:12px;padding:0.75rem 2.5rem;font-size:1rem;font-weight:800;cursor:pointer;width:100%">Awesome! 🎉</button>
+      <button onclick="this.closest('[style*=fixed]').remove()" style="background:var(--accent);color:#000;border:none;border-radius:12px;padding:0.75rem 2.5rem;font-size:1rem;font-weight:800;cursor:pointer;width:100%">Awesome! 🎉</button>
     </div>`;
   spawnConfetti();
   document.body.appendChild(overlay);
@@ -1497,7 +1516,7 @@ function renderHome() {
     </div>`;
   }).join('');
 
-  // auto-save handled by onblur/onkeydown on each input
+  // auto-save via onblur/onkeydown on each input
 }
 
 // ---- Render Library ----
@@ -1601,6 +1620,37 @@ function renderStats() {
   document.getElementById('stat-shortest-streak').textContent = streaks.current  > 0 ? streaks.current  + 'd' : '—';
 
   renderChart(done);
+  renderYearlyChart(done);
+  renderCategoryChart(done);
+}
+
+function renderYearlyChart(done) {
+  const el = document.getElementById('yearly-chart');
+  if (!el) return;
+  const years = {};
+  done.forEach(b => { if (!b.endDate) return; const yr = new Date(b.endDate).getFullYear(); years[yr] = (years[yr]||0)+1; });
+  const keys = Object.keys(years).sort();
+  if (!keys.length) { el.innerHTML = '<div style="color:var(--text3);text-align:center;padding:1.5rem;font-size:0.85rem">No completed books yet</div>'; return; }
+  const maxV = Math.max(...keys.map(k => years[k]), 1), H = 100;
+  el.innerHTML = '<div class="chart-bars">' + keys.map(yr => {
+    const v = years[yr], h = Math.round((v/maxV)*H);
+    return `<div class="chart-col"><div class="chart-val">${v}</div><div class="chart-bar" style="height:${h}px;background:linear-gradient(180deg,#a78bfa,#7c3aed)"></div><div class="chart-month">${yr}</div></div>`;
+  }).join('') + '</div>';
+}
+
+function renderCategoryChart(done) {
+  const el = document.getElementById('category-chart');
+  if (!el) return;
+  const cats = {};
+  done.forEach(b => { const c = b.category||'Other'; cats[c] = (cats[c]||0)+1; });
+  const entries = Object.entries(cats).sort((a,b) => b[1]-a[1]);
+  if (!entries.length) { el.innerHTML = '<div style="color:var(--text3);text-align:center;padding:1.5rem;font-size:0.85rem">No completed books yet</div>'; return; }
+  const maxV = entries[0][1];
+  const clr = {'Self Development':'#34d399','Biography':'#a78bfa','Trading':'#fbbf24','Relationship':'#fb7185','Mindset':'#38bdf8','Finance':'#34d399','Health':'#f87171','Other':'#94a3b8'};
+  el.innerHTML = '<div class="cat-chart">' + entries.map(([cat, cnt]) => {
+    const pct = Math.round((cnt/maxV)*100), col = clr[cat]||'#38bdf8';
+    return `<div class="cat-row"><div class="cat-row-label">${cat}</div><div class="cat-bar-track"><div class="cat-bar-fill" style="width:${pct}%;background:${col}"><span class="cat-bar-count">${cnt}</span></div></div></div>`;
+  }).join('') + '</div>';
 }
 
 function calcStreaks() {
