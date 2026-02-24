@@ -1065,14 +1065,12 @@ async function loadData() {
       const gs = await db.collection('settings').doc('goal').get();
       if (gs.exists) goal = gs.data();
 
-      // Restore saved page before first render
       const _sp = sessionStorage.getItem('pt_page') || 'home';
       document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
       document.querySelectorAll('[data-page]').forEach(l => l.classList.remove('active'));
       const _pe = document.getElementById('page-' + _sp);
       if (_pe) { _pe.classList.add('active'); document.querySelectorAll('[data-page="'+_sp+'"]').forEach(l=>l.classList.add('active')); }
 
-      // Real-time listener for books — auto-syncs across all devices
       db.collection('books').onSnapshot(snapshot => {
         const covers = JSON.parse(localStorage.getItem('pageturn_covers') || '{}');
         books = snapshot.docs.map(d => ({
@@ -1080,7 +1078,6 @@ async function loadData() {
           ...d.data(),
           cover: covers[d.id] || null
         }));
-        // Always render both home and history so completions appear immediately
         const activePage = document.querySelector('.page.active')?.id?.replace('page-','');
         if (activePage === 'home')    { renderHome(); renderHistory(); }
         else if (activePage === 'library') renderLibrary();
@@ -1283,8 +1280,6 @@ async function updatePage(bookId, newPage) {
   const today = todayStr();
   const log = book.pageLogs.find(l => l.date === today);
   if (log) log.page = newPage; else book.pageLogs.push({ date: today, page: newPage });
-
-  // Auto-complete when last page reached
   if (book.totalPages > 0 && newPage >= book.totalPages) {
     book.status = 'completed';
     book.endDate = today;
@@ -1314,7 +1309,6 @@ window.handlePageUpdate = function(id) {
   if (!isNaN(v)) updatePage(id, v);
 };
 
-// ---- Complete ----
 window.completeBook = async function(id) {
   const book = books.find(b => b.id === id);
   if (!book) return;
@@ -1356,78 +1350,110 @@ function circleProgressSVG(pct, color) {
 
 // ---- Cover HTML ----
 // ---- Cover cache (in-memory for session) ----
-const coverCache = {};
+const coverCache = {};       // bookId -> url string | null
+const coverFetching = {};   // bookId -> Promise (in-flight dedup)
+
+// Rate limiter: max 1 API request per 300ms
+const coverQueue = [];
+let coverQueueRunning = false;
+function enqueueCoverFetch(fn) {
+  return new Promise((resolve) => {
+    coverQueue.push(() => fn().then(resolve));
+    if (!coverQueueRunning) drainCoverQueue();
+  });
+}
+async function drainCoverQueue() {
+  coverQueueRunning = true;
+  while (coverQueue.length) {
+    const task = coverQueue.shift();
+    await task();
+    if (coverQueue.length) await new Promise(r => setTimeout(r, 350)); // 350ms between requests
+  }
+  coverQueueRunning = false;
+}
 
 async function fetchCoverURL(book) {
-  if (book.cover) return book.cover;
-  const cacheKey = book.id;
-  if (coverCache[cacheKey] !== undefined) return coverCache[cacheKey];
-
-  // Check localStorage cover cache first
+  // 1. Already on the book object
+  if (book.cover) { coverCache[book.id] = book.cover; return book.cover; }
+  // 2. Memory cache hit
+  if (coverCache[book.id] !== undefined) return coverCache[book.id];
+  // 3. localStorage cache
   try {
     const stored = JSON.parse(localStorage.getItem('pageturn_covers') || '{}');
-    if (stored[book.id]) {
-      coverCache[cacheKey] = stored[book.id];
-      return stored[book.id];
-    }
+    if (stored[book.id]) { coverCache[book.id] = stored[book.id]; return stored[book.id]; }
   } catch(e) {}
-
-  // Fetch from Google Books API
-  try {
-    const q = encodeURIComponent(`${book.title} ${book.author}`);
-    const res = await fetch(`https://www.googleapis.com/books/v1/volumes?q=${q}&maxResults=1&fields=items(volumeInfo(imageLinks))`);
-    const data = await res.json();
-    const img = data?.items?.[0]?.volumeInfo?.imageLinks;
-    // Prefer high-res, fall back to thumbnail
-    const url = (img?.extraLarge || img?.large || img?.medium || img?.thumbnail || '').replace('http:', 'https:');
-    coverCache[cacheKey] = url || null;
-    // Cache to localStorage
-    if (url) {
-      try {
-        const stored = JSON.parse(localStorage.getItem('pageturn_covers') || '{}');
-        stored[book.id] = url;
-        localStorage.setItem('pageturn_covers', JSON.stringify(stored));
-      } catch(e) {}
+  // 4. In-flight dedup — if already fetching this book, wait for same promise
+  if (coverFetching[book.id]) return coverFetching[book.id];
+  // 5. Queue the API request (rate limited)
+  coverFetching[book.id] = enqueueCoverFetch(async () => {
+    try {
+      const q = encodeURIComponent(`${book.title} ${book.author}`);
+      const res = await fetch(`https://www.googleapis.com/books/v1/volumes?q=${q}&maxResults=1&fields=items(volumeInfo(imageLinks))`);
+      if (res.status === 429) { coverCache[book.id] = null; return null; }
+      const data = await res.json();
+      const img = data?.items?.[0]?.volumeInfo?.imageLinks;
+      const url = (img?.extraLarge || img?.large || img?.medium || img?.thumbnail || '').replace('http:', 'https:');
+      coverCache[book.id] = url || null;
+      if (url) {
+        try {
+          const stored = JSON.parse(localStorage.getItem('pageturn_covers') || '{}');
+          stored[book.id] = url;
+          localStorage.setItem('pageturn_covers', JSON.stringify(stored));
+        } catch(e) {}
+      }
+      return url || null;
+    } catch(e) {
+      coverCache[book.id] = null;
+      return null;
+    } finally {
+      delete coverFetching[book.id];
     }
-    return url || null;
-  } catch(e) {
-    coverCache[cacheKey] = null;
-    return null;
-  }
+  });
+  return coverFetching[book.id];
 }
 
 function coverThumb(book, cls, placeholderClass) {
   const emoji = { 'Self Development':'🌱','Biography':'👤','Trading':'📈','Relationship':'❤️','Mindset':'🧠','Finance':'💰','Health':'💪' };
-  // Use cached cover URL if available (sync check)
-  const cached = coverCache[book.id] || book.cover ||
-    (() => { try { return JSON.parse(localStorage.getItem('pageturn_covers') || '{}')[book.id]; } catch(e) { return null; } })();
-
+  // Sync cache check (memory + localStorage)
+  const cached = coverCache[book.id] !== undefined ? coverCache[book.id] :
+    book.cover || (() => { try { return JSON.parse(localStorage.getItem('pageturn_covers') || '{}')[book.id] || null; } catch(e) { return null; } })();
   if (cached) {
-    return `<img src="${cached}" class="${cls}" alt="${esc(book.title)}" onerror="this.style.display='none';this.nextSibling.style.display='flex'" loading="lazy" />
-            <div class="${placeholderClass}" style="display:none">${emoji[book.category] || '📗'}</div>`;
+    coverCache[book.id] = cached;
+    return `<img src="${cached}" class="${cls}" alt="${esc(book.title)}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'" loading="eager" />
+            <div class="${placeholderClass}" style="display:none">${makePlaceholder(book)}</div>`;
   }
-  // Return placeholder first, then async-load cover and swap
-  const uid = 'cv_' + book.id.replace(/[^a-z0-9]/gi, '_');
-  // Trigger async fetch after render
-  setTimeout(() => fetchAndSwapCover(book, uid, cls, placeholderClass), 0);
-  return `<div class="${placeholderClass}" id="${uid}">${emoji[book.category] || '📗'}</div>`;
+  const uid = 'cv_' + book.id.replace(/[^a-z0-9]/gi,'_');
+  // Only schedule fetch if not already in-flight
+  if (!coverFetching[book.id]) {
+    setTimeout(() => fetchAndSwapCover(book, uid, cls, placeholderClass), 0);
+  }
+  return `<div class="${placeholderClass}" id="${uid}">${makePlaceholder(book)}</div>`;
 }
 
 async function fetchAndSwapCover(book, uid, cls, placeholderClass) {
   const url = await fetchCoverURL(book);
   if (!url) return;
   const el = document.getElementById(uid);
-  if (!el) return; // element no longer in DOM
+  if (!el) return;
   const img = document.createElement('img');
-  img.src = url;
   img.className = cls;
   img.alt = book.title;
-  img.loading = 'lazy';
+  img.loading = 'eager';
   img.style.opacity = '0';
   img.style.transition = 'opacity 0.3s ease';
   img.onerror = () => img.remove();
   img.onload = () => { img.style.opacity = '1'; };
-  el.parentNode.replaceChild(img, el);
+  img.src = url;
+  el.parentNode?.replaceChild(img, el);
+}
+
+function makePlaceholder(book) {
+  const CAT_COLORS = {'Self Development':'#059669','Biography':'#7c3aed','Trading':'#d97706','Relationship':'#db2777','Mindset':'#0284c7','Finance':'#16a34a','Health':'#dc2626','Other':'#6b7280'};
+  const words = (book.title || '').split(' ').filter(Boolean);
+  const initials = words.length >= 2 ? (words[0][0] + words[words.length-1][0]).toUpperCase() : (words[0] || '?').slice(0,2).toUpperCase();
+  const color = CAT_COLORS[book.category] || CAT_COLORS.Other;
+  const short = (book.title || '').length > 16 ? (book.title || '').slice(0,14)+'…' : (book.title || '');
+  return `<div style="width:100%;height:100%;background:linear-gradient(160deg,${color}dd,${color}88);display:flex;flex-direction:column;align-items:center;justify-content:center;border-left:4px solid rgba(0,0,0,0.3);box-sizing:border-box;padding:4px;text-align:center;border-radius:inherit"><span style="font-size:1.4rem;font-weight:900;color:rgba(255,255,255,0.95);line-height:1">${initials}</span><span style="font-size:0.45rem;color:rgba(255,255,255,0.75);margin-top:4px;line-height:1.2;word-break:break-word">${short}</span></div>`;
 }
 
 // ---- Render Home ----
