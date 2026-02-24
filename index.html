@@ -1080,11 +1080,12 @@ async function loadData() {
           ...d.data(),
           cover: covers[d.id] || null
         }));
+        // Always render both home and history so completions appear immediately
         const activePage = document.querySelector('.page.active')?.id?.replace('page-','');
-        if (activePage === 'home')    renderHome();
-        if (activePage === 'library') renderLibrary();
-        if (activePage === 'history') renderHistory();
-        if (activePage === 'stats')   renderStats();
+        if (activePage === 'home')    { renderHome(); renderHistory(); }
+        else if (activePage === 'library') renderLibrary();
+        else if (activePage === 'history') { renderHistory(); renderHome(); }
+        else if (activePage === 'stats')   renderStats();
         updateGoalCard();
       }, err => {
         console.error('Firestore listener failed:', err);
@@ -1282,6 +1283,7 @@ async function updatePage(bookId, newPage) {
   const today = todayStr();
   const log = book.pageLogs.find(l => l.date === today);
   if (log) log.page = newPage; else book.pageLogs.push({ date: today, page: newPage });
+
   // Auto-complete when last page reached
   if (book.totalPages > 0 && newPage >= book.totalPages) {
     book.status = 'completed';
@@ -1322,6 +1324,7 @@ window.completeBook = async function(id) {
   await saveBook(book);
   updateGoalCard();
   renderHome();
+  renderHistory();
   showToast('🏆 Book completed! Amazing!');
 };
 
@@ -1470,7 +1473,7 @@ function renderHome() {
             <input type="number" class="page-input" id="pi-${book.id}"
               value="${book.currentPage}" min="0" max="${book.totalPages}"
               onblur="handlePageBlur('${book.id}')"
-              onkeydown="if(event.key='Enter')this.blur()" />
+              onkeydown="if(event.key==='Enter')this.blur()" />
             <span class="page-of">/ ${book.totalPages} pages</span>
           </div>
         </div>
@@ -1478,7 +1481,7 @@ function renderHome() {
     </div>`;
   }).join('');
 
-  // page input saves on blur (onblur on each input)
+  // page input saves on blur
 }
 
 // ---- Render Library ----
