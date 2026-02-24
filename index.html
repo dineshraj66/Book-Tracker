@@ -104,6 +104,7 @@ body { font-family: var(--font-b); background: var(--bg); color: var(--text); mi
 .page { display: none; }
 .page.active { display: block; animation: fadeUp 0.3s ease both; }
 @keyframes fadeUp { from { opacity:0; transform:translateY(14px); } to { opacity:1; transform:translateY(0); } }
+@keyframes confettiFall { 0% { transform: translateY(0) rotate(0deg); opacity:1; } 100% { transform: translateY(105vh) rotate(720deg); opacity:0; } }
 
 /* ── Page Header ── */
 .page-header { margin-bottom: 1.75rem; }
@@ -208,15 +209,17 @@ body { font-family: var(--font-b); background: var(--bg); color: var(--text); mi
   background: var(--surface); border-radius: var(--radius-sm);
   padding: 0.75rem 1rem;
 }
-.circle-progress-wrap { position: relative; width: 58px; height: 58px; flex-shrink: 0; }
+.circle-progress-wrap { position: relative; width: 90px; height: 90px; flex-shrink: 0; }
 .circle-progress-wrap svg { transform: rotate(-90deg); }
 .circle-bg { fill: none; stroke: var(--surface3); stroke-width: 5; }
 .circle-fill { fill: none; stroke-width: 5; stroke-linecap: round; transition: stroke-dashoffset 0.6s ease; }
 .circle-pct-label {
   position: absolute; inset: 0;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 0.7rem; font-weight: 800; color: var(--text);
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  font-size: 1.15rem; font-weight: 900; color: var(--text); line-height: 1;
 }
+.circle-pct-label small { font-size: 0.55rem; font-weight: 600; opacity: 0.5; margin-top: 2px; }
+.page-hint { font-size: 0.65rem; color: var(--text3); margin-top: 0.4rem; opacity: 0.7; }
 
 /* Page controls column */
 .page-update-col { flex: 1; display: flex; flex-direction: column; gap: 0.5rem; min-width: 0; }
@@ -1061,7 +1064,6 @@ async function loadData() {
           ...d.data(),
           cover: covers[d.id] || null  // restore cover from local cache
         }));
-        // Always render both home+history so completions move immediately
         const activePage = document.querySelector('.page.active')?.id?.replace('page-','');
         if (activePage === 'home')    { renderHome(); renderHistory(); }
         else if (activePage === 'library') renderLibrary();
@@ -1264,7 +1266,6 @@ async function updatePage(bookId, newPage) {
   const today = todayStr();
   const log = book.pageLogs.find(l => l.date === today);
   if (log) log.page = newPage; else book.pageLogs.push({ date: today, page: newPage });
-  // Auto-complete when last page reached
   if (book.totalPages > 0 && newPage >= book.totalPages) {
     book.status = 'completed';
     book.endDate = today;
@@ -1272,20 +1273,13 @@ async function updatePage(bookId, newPage) {
     updateGoalCard();
     renderHome();
     renderHistory();
-    showToast('🏆 Book completed! Amazing!');
+    showCelebration(book);
     return;
   }
   await saveBook(book);
   renderHome();
-  showToast('✅ Progress updated!');
+  showToast('✅ Progress saved!');
 }
-
-window.handlePageUpdate = function(id) {
-  const inp = document.getElementById('pi-' + id);
-  if (!inp) return;
-  const v = parseInt(inp.value);
-  if (!isNaN(v)) updatePage(id, v);
-};
 
 window.handlePageBlur = function(id) {
   const inp = document.getElementById('pi-' + id);
@@ -1294,7 +1288,7 @@ window.handlePageBlur = function(id) {
   if (!isNaN(v)) updatePage(id, v);
 };
 
-// ---- Complete ----
+// ---- Complete (manual via edit modal) ----
 window.completeBook = async function(id) {
   const book = books.find(b => b.id === id);
   if (!book) return;
@@ -1305,8 +1299,49 @@ window.completeBook = async function(id) {
   updateGoalCard();
   renderHome();
   renderHistory();
-  showToast('🏆 Book completed! Amazing!');
+  showCelebration(book);
 };
+
+function spawnConfetti() {
+  const colors = ['#f59e0b','#10b981','#3b82f6','#ec4899','#8b5cf6','#ef4444'];
+  for (let i = 0; i < 80; i++) {
+    const el = document.createElement('div');
+    const color = colors[Math.floor(Math.random() * colors.length)];
+    const size = Math.random() * 8 + 6;
+    el.style.cssText = `position:fixed;top:-10px;left:${Math.random()*100}vw;width:${size}px;height:${size}px;background:${color};border-radius:${Math.random()>0.5?'50%':'2px'};z-index:10000;pointer-events:none;animation:confettiFall ${1.5+Math.random()*2}s ease-in forwards`;
+    el.style.animationDelay = Math.random() * 0.8 + 's';
+    document.body.appendChild(el);
+    setTimeout(() => el.remove(), 4000);
+  }
+}
+
+function showCelebration(book) {
+  const pagesRead = book.totalPages || 0;
+  const days = book.startDate ? Math.max(1, Math.round((new Date() - new Date(book.startDate)) / 86400000) + 1) : null;
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:9999;display:flex;align-items:center;justify-content:center;animation:fadeIn 0.3s ease';
+  overlay.innerHTML = `
+    <div style="background:var(--surface2);border-radius:24px;padding:2.5rem 2rem;text-align:center;max-width:320px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,0.5);position:relative">
+      <div style="font-size:4rem;margin-bottom:0.5rem">🏆</div>
+      <div style="font-size:1.4rem;font-weight:900;color:var(--accent);margin-bottom:0.25rem">Book Completed!</div>
+      <div style="font-size:1rem;font-weight:700;color:var(--text);margin-bottom:0.25rem">${esc(book.title)}</div>
+      <div style="font-size:0.85rem;color:var(--text3);margin-bottom:1.25rem">by ${esc(book.author)}</div>
+      <div style="display:flex;gap:1rem;justify-content:center;margin-bottom:1.5rem">
+        <div style="background:var(--surface3);border-radius:12px;padding:0.75rem 1.25rem">
+          <div style="font-size:1.3rem;font-weight:900;color:var(--accent)">${pagesRead}</div>
+          <div style="font-size:0.65rem;color:var(--text3);text-transform:uppercase;letter-spacing:0.05em">Pages</div>
+        </div>
+        ${days ? `<div style="background:var(--surface3);border-radius:12px;padding:0.75rem 1.25rem">
+          <div style="font-size:1.3rem;font-weight:900;color:var(--accent)">${days}</div>
+          <div style="font-size:0.65rem;color:var(--text3);text-transform:uppercase;letter-spacing:0.05em">Days</div>
+        </div>` : ''}
+      </div>
+      <button onclick="this.closest('div[style*=fixed]').remove()" style="background:var(--accent);color:#000;border:none;border-radius:12px;padding:0.75rem 2.5rem;font-size:1rem;font-weight:800;cursor:pointer;width:100%">Awesome! 🎉</button>
+    </div>`;
+  spawnConfetti();
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+}
 
 // ---- Delete ----
 window.deleteBook = async function(id) {
@@ -1319,14 +1354,14 @@ window.deleteBook = async function(id) {
 
 // ---- Circular Progress SVG ----
 function circleProgressSVG(pct, color) {
-  const r = 26;
+  const r = 36;
   const circ = 2 * Math.PI * r;
   const dash = circ - (pct / 100) * circ;
   return `
-  <svg width="64" height="64" viewBox="0 0 64 64">
-    <circle class="circle-bg" cx="32" cy="32" r="${r}" />
+  <svg width="90" height="90" viewBox="0 0 90 90">
+    <circle class="circle-bg" cx="45" cy="45" r="${r}" />
     <circle class="circle-fill"
-      cx="32" cy="32" r="${r}"
+      cx="45" cy="45" r="${r}"
       stroke="${color}"
       stroke-dasharray="${circ}"
       stroke-dashoffset="${dash}"
@@ -1413,7 +1448,8 @@ async function fetchAndSwapCover(book, uid, cls, placeholderClass) {
 // ---- Render Home ----
 function renderHome() {
   updateGoalCard();
-  const reading = books.filter(b => b.status === 'reading');
+  const today = todayStr();
+  const reading = books.filter(b => b.status === 'reading' && (!b.startDate || b.startDate <= today) && b.currentPage < b.totalPages);
   const container = document.getElementById('current-books-container');
 
   if (!reading.length) {
@@ -1426,9 +1462,9 @@ function renderHome() {
     const color = CAT_COLORS[book.category] || '#38bdf8';
     const catClass = 'cat-' + (book.category || '').replace(/ /g, '\\ ');
 
+    const daysReading = book.startDate ? Math.max(1, Math.round((new Date() - new Date(book.startDate)) / 86400000) + 1) : null;
     return `
     <div class="book-card">
-      <!-- Top: cover + info -->
       <div class="book-card-top">
         ${coverThumb(book, 'book-cover-thumb', 'book-cover-placeholder')}
         <div class="book-card-info">
@@ -1438,39 +1474,37 @@ function renderHome() {
           </div>
           <div class="book-title-text">${esc(book.title)}</div>
           <div class="book-author-text">by ${esc(book.author)}</div>
-          ${lastReadLabel(book) ? `<div class="last-read-label">🕐 Last read: ${lastReadLabel(book)}</div>` : ''}
+          ${daysReading ? `<div class="last-read-label">📅 Day ${daysReading} of reading</div>` : ''}
+          ${lastReadLabel(book) ? `<div class="last-read-label">🕐 ${lastReadLabel(book)}</div>` : ''}
         </div>
       </div>
-      <!-- Bottom: progress + controls full width -->
       <div class="progress-row">
         <div class="circle-progress-wrap">
           ${circleProgressSVG(pct, color)}
-          <div class="circle-pct-label">${pct}%</div>
+          <div class="circle-pct-label">${pct}%<small>done</small></div>
         </div>
         <div class="page-update-col">
           <div class="page-update-row">
             <input type="number" class="page-input" id="pi-${book.id}"
-              value="${book.currentPage}" min="0" max="${book.totalPages}" />
+              value="${book.currentPage}" min="0" max="${book.totalPages}"
+              onblur="handlePageBlur('${book.id}')"
+              onkeydown="if(event.key==='Enter')this.blur()" />
             <span class="page-of">/ ${book.totalPages} pages</span>
-            <button class="update-btn" onclick="handlePageUpdate('${book.id}')">Update</button>
           </div>
-          <button class="complete-btn" onclick="completeBook('${book.id}')">✓ Mark Complete</button>
+          <div class="page-hint">Tap outside to save · last page auto-completes 🎉</div>
         </div>
       </div>
     </div>`;
   }).join('');
 
-  container.querySelectorAll('.page-input').forEach(inp => {
-    inp.addEventListener('keydown', e => {
-      if (e.key === 'Enter') handlePageUpdate(inp.id.replace('pi-', ''));
-    });
-  });
+  // auto-save handled by onblur/onkeydown on each input
 }
 
 // ---- Render Library ----
 function renderLibrary() {
   const container = document.getElementById('library-books-container');
-  let list = books.filter(b => b.status === 'reading');
+  const today = todayStr();
+  let list = books.filter(b => b.status === 'reading' && b.startDate && b.startDate > today);
   if (catFilter !== 'all') list = list.filter(b => b.category === catFilter);
 
   document.querySelectorAll('.filter-btn').forEach(btn => {
@@ -1737,7 +1771,6 @@ function setupEditModal() {
     await saveBook(book);
     overlay.classList.remove('open');
     showToast('✅ Book updated!');
-    // Always refresh home + history so status changes propagate immediately
     renderHome(); renderHistory(); renderLibrary(); updateGoalCard();
   });
 
