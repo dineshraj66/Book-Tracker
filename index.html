@@ -1282,8 +1282,7 @@ async function updatePage(bookId, newPage) {
   const today = todayStr();
   const log = book.pageLogs.find(l => l.date === today);
   if (log) log.page = newPage; else book.pageLogs.push({ date: today, page: newPage });
-
-  // Auto-complete when last page is reached
+  // Auto-complete when last page reached
   if (book.totalPages > 0 && newPage >= book.totalPages) {
     book.status = 'completed';
     book.endDate = today;
@@ -1294,7 +1293,6 @@ async function updatePage(bookId, newPage) {
     showToast('🏆 Book completed! Amazing!');
     return;
   }
-
   await saveBook(book);
   renderHome();
   showToast('✅ Progress updated!');
@@ -1472,7 +1470,7 @@ function renderHome() {
             <input type="number" class="page-input" id="pi-${book.id}"
               value="${book.currentPage}" min="0" max="${book.totalPages}"
               onblur="handlePageBlur('${book.id}')"
-              onkeydown="if(event.key==='Enter')this.blur()" />
+              onkeydown="if(event.key='Enter')this.blur()" />
             <span class="page-of">/ ${book.totalPages} pages</span>
           </div>
         </div>
@@ -1480,7 +1478,7 @@ function renderHome() {
     </div>`;
   }).join('');
 
-  // page input saves on blur
+  // page input saves on blur (onblur on each input)
 }
 
 // ---- Render Library ----
@@ -1592,27 +1590,26 @@ function renderYearlyChart(done) {
   const container = document.getElementById('yearly-chart');
   if (!container) return;
   const years = {};
-  done.forEach(b => { if (!b.endDate) return; const yr = new Date(b.endDate).getFullYear(); years[yr] = (years[yr]||0)+1; });
+  done.forEach(b => { if (!b.endDate) return; const yr = new Date(b.endDate).getFullYear(); years[yr]=(years[yr]||0)+1; });
   const keys = Object.keys(years).sort();
   if (!keys.length) { container.innerHTML = '<div style="color:var(--text3);text-align:center;padding:2rem;font-size:0.85rem;">No completed books yet</div>'; return; }
-  const maxV = Math.max(...keys.map(k=>years[k]), 1);
-  const H = 110;
-  container.innerHTML = '<div class="chart-bars">' + keys.map(yr => {
-    const v = years[yr], h = Math.round((v/maxV)*H);
+  const maxV = Math.max(...keys.map(k=>years[k]),1), H=110;
+  container.innerHTML = '<div class="chart-bars">'+keys.map(yr=>{
+    const v=years[yr],h=Math.round((v/maxV)*H);
     return '<div class="chart-col"><div class="chart-val">'+v+'</div><div class="chart-bar" style="height:'+h+'px;background:linear-gradient(180deg,#a78bfa,#7c3aed)" data-val="'+v+'"></div><div class="chart-month">'+yr+'</div></div>';
-  }).join('') + '</div>';
+  }).join('')+'</div>';
 }
 
 function renderCategoryChart(done) {
   const container = document.getElementById('category-chart');
   if (!container) return;
-  const cats = {};
-  done.forEach(b => { const c = b.category||'Other'; cats[c]=(cats[c]||0)+1; });
-  const entries = Object.entries(cats).sort((a,b)=>b[1]-a[1]);
-  if (!entries.length) { container.innerHTML = '<div style="color:var(--text3);text-align:center;padding:2rem;font-size:0.85rem;">No completed books yet</div>'; return; }
-  const maxV = entries[0][1];
-  const clr = {'Self Development':'#34d399','Biography':'#a78bfa','Trading':'#fbbf24','Relationship':'#fb7185','Mindset':'#38bdf8','Finance':'#34d399','Health':'#fb7185','Other':'#94a3b8'};
-  container.innerHTML = '<div class="cat-chart">' + entries.map(function(e){
+  const cats={};
+  done.forEach(b=>{const c=b.category||'Other';cats[c]=(cats[c]||0)+1;});
+  const entries=Object.entries(cats).sort((a,b)=>b[1]-a[1]);
+  if (!entries.length) { container.innerHTML='<div style="color:var(--text3);text-align:center;padding:2rem;font-size:0.85rem;">No completed books yet</div>'; return; }
+  const maxV=entries[0][1];
+  const clr={'Self Development':'#34d399','Biography':'#a78bfa','Trading':'#fbbf24','Relationship':'#fb7185','Mindset':'#38bdf8','Finance':'#34d399','Health':'#fb7185','Other':'#94a3b8'};
+  container.innerHTML='<div class="cat-chart">'+entries.map(function(e){
     const cat=e[0],cnt=e[1],pct=Math.round((cnt/maxV)*100),col=clr[cat]||'#38bdf8';
     return '<div class="cat-row"><div class="cat-row-label">'+cat+'</div><div class="cat-bar-track"><div class="cat-bar-fill" style="width:'+pct+'%;background:'+col+'"><span class="cat-bar-count">'+cnt+'</span></div></div></div>';
   }).join('')+'</div>';
