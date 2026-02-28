@@ -1081,11 +1081,10 @@ async function loadData() {
           ...d.data(),
           cover: covers[d.id] || null
         }));
-        // Auto-fix stuck books (currentPage >= totalPages but status still reading)
+        // Auto-fix stuck books
         books.forEach(async b => {
           if (b.status === 'reading' && b.totalPages > 0 && b.currentPage >= b.totalPages) {
-            b.status = 'completed';
-            b.endDate = b.endDate || todayStr();
+            b.status = 'completed'; b.endDate = b.endDate || todayStr();
             await saveBook(b);
           }
         });
@@ -1293,14 +1292,10 @@ async function updatePage(bookId, newPage) {
   const log = book.pageLogs.find(l => l.date === today);
   if (log) log.page = newPage; else book.pageLogs.push({ date: today, page: newPage });
   if (book.totalPages > 0 && newPage >= book.totalPages) {
-    book.status = 'completed';
-    book.endDate = today;
+    book.status = 'completed'; book.endDate = today;
     await saveBook(book);
-    updateGoalCard();
-    renderHome();
-    renderHistory();
-    showCelebration(book);
-    return;
+    updateGoalCard(); renderHome(); renderHistory();
+    showCelebration(book); return;
   }
   await saveBook(book);
   renderHome();
@@ -1317,49 +1312,38 @@ window.handlePageBlur = function(id) {
 window.completeBook = async function(id) {
   const book = books.find(b => b.id === id);
   if (!book) return;
-  book.status = 'completed';
-  book.currentPage = book.totalPages;
-  book.endDate = todayStr();
+  book.status = 'completed'; book.currentPage = book.totalPages; book.endDate = todayStr();
   await saveBook(book);
-  updateGoalCard();
-  renderHome();
-  renderHistory();
+  updateGoalCard(); renderHome(); renderHistory();
   showCelebration(book);
 };
 
 function spawnConfetti() {
   const colors = ['#f59e0b','#10b981','#3b82f6','#ec4899','#8b5cf6','#ef4444'];
-  for (let i = 0; i < 80; i++) {
-    const el = document.createElement('div');
-    const size = Math.random() * 8 + 6;
-    el.style.cssText = `position:fixed;top:-10px;left:${Math.random()*100}vw;width:${size}px;height:${size}px;background:${colors[Math.floor(Math.random()*colors.length)]};border-radius:${Math.random()>0.5?'50%':'2px'};z-index:10000;pointer-events:none;animation:confettiFall ${1.5+Math.random()*2}s ease-in forwards;animation-delay:${Math.random()*0.8}s`;
-    document.body.appendChild(el);
-    setTimeout(() => el.remove(), 4000);
+  for (let i=0;i<80;i++) {
+    const el=document.createElement('div'), size=Math.random()*8+6;
+    el.style.cssText=`position:fixed;top:-10px;left:${Math.random()*100}vw;width:${size}px;height:${size}px;background:${colors[Math.floor(Math.random()*colors.length)]};border-radius:${Math.random()>.5?'50%':'2px'};z-index:10000;pointer-events:none;animation:confettiFall ${1.5+Math.random()*2}s ease-in forwards;animation-delay:${Math.random()*.8}s`;
+    document.body.appendChild(el); setTimeout(()=>el.remove(),4000);
   }
 }
 
 function showCelebration(book) {
-  const days = book.startDate ? Math.max(1, Math.round((new Date() - new Date(book.startDate)) / 86400000) + 1) : null;
+  const days = book.startDate ? Math.max(1,Math.round((new Date()-new Date(book.startDate))/86400000)+1) : null;
   const overlay = document.createElement('div');
-  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:9999;display:flex;align-items:center;justify-content:center';
-  overlay.innerHTML = `
-    <div style="background:var(--surface2);border-radius:24px;padding:2.5rem 2rem;text-align:center;max-width:320px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,0.5)">
-      <div style="font-size:4rem;margin-bottom:0.5rem">🏆</div>
-      <div style="font-size:1.4rem;font-weight:900;color:var(--accent);margin-bottom:0.25rem">Book Completed!</div>
-      <div style="font-size:1rem;font-weight:700;color:var(--text);margin-bottom:0.25rem">${esc(book.title)}</div>
-      <div style="font-size:0.85rem;color:var(--text3);margin-bottom:1.25rem">by ${esc(book.author)}</div>
-      <div style="display:flex;gap:1rem;justify-content:center;margin-bottom:1.5rem">
-        <div style="background:var(--surface3);border-radius:12px;padding:0.75rem 1.25rem">
-          <div style="font-size:1.3rem;font-weight:900;color:var(--accent)">${book.totalPages}</div>
-          <div style="font-size:0.65rem;color:var(--text3);text-transform:uppercase;letter-spacing:0.05em">Pages</div>
-        </div>
-        ${days ? `<div style="background:var(--surface3);border-radius:12px;padding:0.75rem 1.25rem"><div style="font-size:1.3rem;font-weight:900;color:var(--accent)">${days}</div><div style="font-size:0.65rem;color:var(--text3);text-transform:uppercase;letter-spacing:0.05em">Days</div></div>` : ''}
-      </div>
-      <button onclick="this.closest('[style*=fixed]').remove()" style="background:var(--accent);color:#000;border:none;border-radius:12px;padding:0.75rem 2.5rem;font-size:1rem;font-weight:800;cursor:pointer;width:100%">Awesome! 🎉</button>
-    </div>`;
-  spawnConfetti();
-  document.body.appendChild(overlay);
-  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+  overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:9999;display:flex;align-items:center;justify-content:center';
+  overlay.innerHTML=`<div style="background:var(--surface2);border-radius:24px;padding:2.5rem 2rem;text-align:center;max-width:320px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,0.5)">
+    <div style="font-size:4rem;margin-bottom:0.5rem">🏆</div>
+    <div style="font-size:1.4rem;font-weight:900;color:var(--accent);margin-bottom:0.25rem">Book Completed!</div>
+    <div style="font-size:1rem;font-weight:700;color:var(--text);margin-bottom:0.25rem">${esc(book.title)}</div>
+    <div style="font-size:0.85rem;color:var(--text3);margin-bottom:1.25rem">by ${esc(book.author)}</div>
+    <div style="display:flex;gap:1rem;justify-content:center;margin-bottom:1.5rem">
+      <div style="background:var(--surface3);border-radius:12px;padding:0.75rem 1.25rem"><div style="font-size:1.3rem;font-weight:900;color:var(--accent)">${book.totalPages}</div><div style="font-size:0.65rem;color:var(--text3);text-transform:uppercase;letter-spacing:0.05em">Pages</div></div>
+      ${days?`<div style="background:var(--surface3);border-radius:12px;padding:0.75rem 1.25rem"><div style="font-size:1.3rem;font-weight:900;color:var(--accent)">${days}</div><div style="font-size:0.65rem;color:var(--text3);text-transform:uppercase;letter-spacing:0.05em">Days</div></div>`:''}
+    </div>
+    <button onclick="this.closest('[style*=fixed]').remove()" style="background:var(--accent);color:#000;border:none;border-radius:12px;padding:0.75rem 2.5rem;font-size:1rem;font-weight:800;cursor:pointer;width:100%">Awesome! 🎉</button>
+  </div>`;
+  spawnConfetti(); document.body.appendChild(overlay);
+  overlay.addEventListener('click', e => { if(e.target===overlay) overlay.remove(); });
 }
 
 // ---- Delete ----
@@ -1392,76 +1376,93 @@ function circleProgressSVG(pct, color) {
 // ---- Cover cache (in-memory for session) ----
 const coverCache = {};
 
-async function fetchCoverURL(book) {
-  if (book.cover) return book.cover;
-  const cacheKey = book.id;
-  if (coverCache[cacheKey] !== undefined) return coverCache[cacheKey];
+// ── Cover image system with rate-limiter + dedup ──
+const coverFetching = {};   // bookId → Promise (in-flight dedup)
+const coverQueue    = [];   // task queue
+let   coverQueueRunning = false;
 
-  // Check localStorage cover cache first
+function enqueueCoverFetch(fn) {
+  return new Promise(resolve => {
+    coverQueue.push(() => fn().then(resolve));
+    if (!coverQueueRunning) drainCoverQueue();
+  });
+}
+async function drainCoverQueue() {
+  coverQueueRunning = true;
+  while (coverQueue.length) {
+    const task = coverQueue.shift();
+    await task();
+    if (coverQueue.length) await new Promise(r => setTimeout(r, 350));
+  }
+  coverQueueRunning = false;
+}
+
+async function fetchCoverURL(book) {
+  if (book.cover) { coverCache[book.id] = book.cover; return book.cover; }
+  if (coverCache[book.id] !== undefined) return coverCache[book.id];
   try {
     const stored = JSON.parse(localStorage.getItem('pageturn_covers') || '{}');
-    if (stored[book.id]) {
-      coverCache[cacheKey] = stored[book.id];
-      return stored[book.id];
-    }
+    if (stored[book.id]) { coverCache[book.id] = stored[book.id]; return stored[book.id]; }
   } catch(e) {}
+  if (coverFetching[book.id]) return coverFetching[book.id];
+  coverFetching[book.id] = enqueueCoverFetch(async () => {
+    try {
+      const q = encodeURIComponent(`${book.title} ${book.author}`);
+      const res = await fetch(`https://www.googleapis.com/books/v1/volumes?q=${q}&maxResults=1&fields=items(volumeInfo(imageLinks))`);
+      if (res.status === 429) { coverCache[book.id] = null; return null; }
+      const data = await res.json();
+      const img = data?.items?.[0]?.volumeInfo?.imageLinks;
+      const url = (img?.extraLarge || img?.large || img?.medium || img?.thumbnail || '').replace('http:', 'https:');
+      coverCache[book.id] = url || null;
+      if (url) {
+        try {
+          const stored = JSON.parse(localStorage.getItem('pageturn_covers') || '{}');
+          stored[book.id] = url;
+          localStorage.setItem('pageturn_covers', JSON.stringify(stored));
+        } catch(e) {}
+      }
+      return url || null;
+    } catch(e) { coverCache[book.id] = null; return null; }
+    finally { delete coverFetching[book.id]; }
+  });
+  return coverFetching[book.id];
+}
 
-  // Fetch from Google Books API
-  try {
-    const q = encodeURIComponent(`${book.title} ${book.author}`);
-    const res = await fetch(`https://www.googleapis.com/books/v1/volumes?q=${q}&maxResults=1&fields=items(volumeInfo(imageLinks))`);
-    const data = await res.json();
-    const img = data?.items?.[0]?.volumeInfo?.imageLinks;
-    // Prefer high-res, fall back to thumbnail
-    const url = (img?.extraLarge || img?.large || img?.medium || img?.thumbnail || '').replace('http:', 'https:');
-    coverCache[cacheKey] = url || null;
-    // Cache to localStorage
-    if (url) {
-      try {
-        const stored = JSON.parse(localStorage.getItem('pageturn_covers') || '{}');
-        stored[book.id] = url;
-        localStorage.setItem('pageturn_covers', JSON.stringify(stored));
-      } catch(e) {}
-    }
-    return url || null;
-  } catch(e) {
-    coverCache[cacheKey] = null;
-    return null;
-  }
+function makePlaceholder(book, placeholderClass) {
+  const CAT_COLORS = {'Self Development':'#059669','Biography':'#7c3aed','Trading':'#d97706','Relationship':'#db2777','Mindset':'#0284c7','Finance':'#16a34a','Health':'#dc2626','Other':'#6b7280'};
+  const words = (book.title||'').split(' ').filter(Boolean);
+  const initials = words.length >= 2 ? (words[0][0]+words[words.length-1][0]).toUpperCase() : (words[0]||'?').slice(0,2).toUpperCase();
+  const color = CAT_COLORS[book.category] || CAT_COLORS.Other;
+  const short = (book.title||'').length > 16 ? (book.title||'').slice(0,14)+'…' : (book.title||'');
+  return `<div class="${placeholderClass}"><div style="width:100%;height:100%;background:linear-gradient(160deg,${color}dd,${color}88);display:flex;flex-direction:column;align-items:center;justify-content:center;border-left:4px solid rgba(0,0,0,0.3);box-sizing:border-box;padding:4px;text-align:center;border-radius:inherit"><span style="font-size:1.2rem;font-weight:900;color:rgba(255,255,255,0.95);line-height:1">${initials}</span><span style="font-size:0.45rem;color:rgba(255,255,255,0.75);margin-top:3px;line-height:1.2;word-break:break-word">${short}</span></div></div>`;
 }
 
 function coverThumb(book, cls, placeholderClass) {
-  const emoji = { 'Self Development':'🌱','Biography':'👤','Trading':'📈','Relationship':'❤️','Mindset':'🧠','Finance':'💰','Health':'💪' };
-  // Use cached cover URL if available (sync check)
-  const cached = coverCache[book.id] || book.cover ||
-    (() => { try { return JSON.parse(localStorage.getItem('pageturn_covers') || '{}')[book.id]; } catch(e) { return null; } })();
-
+  const cached = coverCache[book.id] !== undefined ? coverCache[book.id] :
+    book.cover || (() => { try { return JSON.parse(localStorage.getItem('pageturn_covers') || '{}')[book.id] || null; } catch(e) { return null; } })();
   if (cached) {
-    return `<img src="${cached}" class="${cls}" alt="${esc(book.title)}" onerror="this.style.display='none';this.nextSibling.style.display='flex'" loading="lazy" />
-            <div class="${placeholderClass}" style="display:none">${emoji[book.category] || '📗'}</div>`;
+    coverCache[book.id] = cached;
+    return `<img src="${cached}" class="${cls}" alt="${esc(book.title)}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'" loading="eager" />${makePlaceholder(book, placeholderClass).replace('>', ' style="display:none">')}`;
   }
-  // Return placeholder first, then async-load cover and swap
-  const uid = 'cv_' + book.id.replace(/[^a-z0-9]/gi, '_');
-  // Trigger async fetch after render
-  setTimeout(() => fetchAndSwapCover(book, uid, cls, placeholderClass), 0);
-  return `<div class="${placeholderClass}" id="${uid}">${emoji[book.category] || '📗'}</div>`;
+  const uid = 'cv_' + book.id.replace(/[^a-z0-9]/gi,'_');
+  if (!coverFetching[book.id]) {
+    setTimeout(() => fetchAndSwapCover(book, uid, cls, placeholderClass), 0);
+  }
+  return makePlaceholder(book, placeholderClass).replace('>', ` id="${uid}">`);
 }
 
 async function fetchAndSwapCover(book, uid, cls, placeholderClass) {
   const url = await fetchCoverURL(book);
   if (!url) return;
   const el = document.getElementById(uid);
-  if (!el) return; // element no longer in DOM
+  if (!el) return;
   const img = document.createElement('img');
-  img.src = url;
-  img.className = cls;
-  img.alt = book.title;
-  img.loading = 'lazy';
-  img.style.opacity = '0';
-  img.style.transition = 'opacity 0.3s ease';
-  img.onerror = () => img.remove();
+  img.src = url; img.className = cls; img.alt = book.title; img.loading = 'lazy';
+  img.style.cssText = 'opacity:0;transition:opacity 0.3s ease';
   img.onload = () => { img.style.opacity = '1'; };
-  el.parentNode.replaceChild(img, el);
+  img.onerror = () => el.style.display = 'flex';
+  el.parentNode.insertBefore(img, el);
+  el.style.display = 'none';
 }
 
 // ---- Render Home ----
@@ -1625,32 +1626,24 @@ function renderStats() {
 }
 
 function renderYearlyChart(done) {
-  const el = document.getElementById('yearly-chart');
-  if (!el) return;
+  const el = document.getElementById('yearly-chart'); if (!el) return;
   const years = {};
-  done.forEach(b => { if (!b.endDate) return; const yr = new Date(b.endDate).getFullYear(); years[yr] = (years[yr]||0)+1; });
+  done.forEach(b => { if (!b.endDate) return; const yr = new Date(b.endDate).getFullYear(); years[yr]=(years[yr]||0)+1; });
   const keys = Object.keys(years).sort();
-  if (!keys.length) { el.innerHTML = '<div style="color:var(--text3);text-align:center;padding:1.5rem;font-size:0.85rem">No completed books yet</div>'; return; }
-  const maxV = Math.max(...keys.map(k => years[k]), 1), H = 100;
-  el.innerHTML = '<div class="chart-bars">' + keys.map(yr => {
-    const v = years[yr], h = Math.round((v/maxV)*H);
-    return `<div class="chart-col"><div class="chart-val">${v}</div><div class="chart-bar" style="height:${h}px;background:linear-gradient(180deg,#a78bfa,#7c3aed)"></div><div class="chart-month">${yr}</div></div>`;
-  }).join('') + '</div>';
+  if (!keys.length) { el.innerHTML='<div style="color:var(--text3);text-align:center;padding:1.5rem;font-size:0.85rem">No completed books yet</div>'; return; }
+  const maxV=Math.max(...keys.map(k=>years[k]),1), H=100;
+  el.innerHTML='<div class="chart-bars">'+keys.map(yr=>{const v=years[yr],h=Math.round((v/maxV)*H);return `<div class="chart-col"><div class="chart-val">${v}</div><div class="chart-bar" style="height:${h}px;background:linear-gradient(180deg,#a78bfa,#7c3aed)"></div><div class="chart-month">${yr}</div></div>`;}).join('')+'</div>';
 }
 
 function renderCategoryChart(done) {
-  const el = document.getElementById('category-chart');
-  if (!el) return;
-  const cats = {};
-  done.forEach(b => { const c = b.category||'Other'; cats[c] = (cats[c]||0)+1; });
-  const entries = Object.entries(cats).sort((a,b) => b[1]-a[1]);
-  if (!entries.length) { el.innerHTML = '<div style="color:var(--text3);text-align:center;padding:1.5rem;font-size:0.85rem">No completed books yet</div>'; return; }
-  const maxV = entries[0][1];
-  const clr = {'Self Development':'#34d399','Biography':'#a78bfa','Trading':'#fbbf24','Relationship':'#fb7185','Mindset':'#38bdf8','Finance':'#34d399','Health':'#f87171','Other':'#94a3b8'};
-  el.innerHTML = '<div class="cat-chart">' + entries.map(([cat, cnt]) => {
-    const pct = Math.round((cnt/maxV)*100), col = clr[cat]||'#38bdf8';
-    return `<div class="cat-row"><div class="cat-row-label">${cat}</div><div class="cat-bar-track"><div class="cat-bar-fill" style="width:${pct}%;background:${col}"><span class="cat-bar-count">${cnt}</span></div></div></div>`;
-  }).join('') + '</div>';
+  const el = document.getElementById('category-chart'); if (!el) return;
+  const cats={};
+  done.forEach(b=>{const c=b.category||'Other';cats[c]=(cats[c]||0)+1;});
+  const entries=Object.entries(cats).sort((a,b)=>b[1]-a[1]);
+  if (!entries.length) { el.innerHTML='<div style="color:var(--text3);text-align:center;padding:1.5rem;font-size:0.85rem">No completed books yet</div>'; return; }
+  const maxV=entries[0][1];
+  const clr={'Self Development':'#34d399','Biography':'#a78bfa','Trading':'#fbbf24','Relationship':'#fb7185','Mindset':'#38bdf8','Finance':'#34d399','Health':'#f87171','Other':'#94a3b8'};
+  el.innerHTML='<div class="cat-chart">'+entries.map(([cat,cnt])=>{const pct=Math.round((cnt/maxV)*100),col=clr[cat]||'#38bdf8';return `<div class="cat-row"><div class="cat-row-label">${cat}</div><div class="cat-bar-track"><div class="cat-bar-fill" style="width:${pct}%;background:${col}"><span class="cat-bar-count">${cnt}</span></div></div></div>`;}).join('')+'</div>';
 }
 
 function calcStreaks() {
