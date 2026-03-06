@@ -1,4 +1,4 @@
-const CACHE = 'pageturn-v10';
+const CACHE = 'pageturn-v11';
 self.addEventListener('install', e => {
   self.skipWaiting();
   e.waitUntil(caches.open(CACHE).then(c => c.add('/')).catch(() => {}));

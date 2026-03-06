@@ -1068,6 +1068,7 @@ async function loadData() {
       const gs = await db.collection('settings').doc('goal').get();
       if (gs.exists) goal = gs.data();
 
+      // Real-time listener for books — auto-syncs across all devices
       const _sp = sessionStorage.getItem('pt_page') || 'home';
       document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
       document.querySelectorAll('[data-page]').forEach(l => l.classList.remove('active'));
@@ -1075,8 +1076,16 @@ async function loadData() {
       if (_pe) { _pe.classList.add('active'); document.querySelectorAll(`[data-page="${_sp}"]`).forEach(l => l.classList.add('active')); }
 
       db.collection('books').onSnapshot(snapshot => {
-        const covers = JSON.parse(localStorage.getItem('pageturn_covers') || '{}');
-        books = snapshot.docs.map(d => ({ id: d.id, ...d.data(), cover: covers[d.id]||null }));
+        const lsCovers = JSON.parse(localStorage.getItem('pageturn_covers') || '{}');
+        books = snapshot.docs.map(d => {
+          const data = d.data();
+          // coverUrl saved in Firestore — warm up local cache
+          if (data.coverUrl && !lsCovers[d.id]) {
+            try { lsCovers[d.id]=data.coverUrl; localStorage.setItem('pageturn_covers', JSON.stringify(lsCovers)); } catch(e) {}
+          }
+          if (data.coverUrl) coverCache[d.id] = data.coverUrl;
+          return { id: d.id, ...data };
+        });
         books.forEach(async b => {
           if (b.status==='reading' && b.totalPages>0 && b.currentPage>=b.totalPages) {
             b.status='completed'; b.endDate=b.endDate||todayStr(); await saveBook(b);
@@ -1120,16 +1129,12 @@ async function saveBook(book) {
     if (i >= 0) d.books[i] = book; else d.books.push(book);
     lsSave(d);
   } else {
-    // Save cover separately in localStorage (too large for Firestore)
-    if (book.cover) {
-      try {
-        const covers = JSON.parse(localStorage.getItem('pageturn_covers') || '{}');
-        covers[book.id] = book.cover;
-        localStorage.setItem('pageturn_covers', JSON.stringify(covers));
-      } catch(e) {}
+    // coverUrl is a short string URL — keep it in Firestore for cross-device persistence
+    const { id, ...data } = book;
+    // Sync coverUrl to localStorage cache too
+    if (data.coverUrl) {
+      try { const s=JSON.parse(localStorage.getItem('pageturn_covers')||'{}'); s[id]=data.coverUrl; localStorage.setItem('pageturn_covers', JSON.stringify(s)); } catch(e) {}
     }
-    // Strip cover before saving to Firestore
-    const { id, cover, ...data } = book;
     await db.collection('books').doc(id).set(data);
   }
 }
@@ -1355,147 +1360,124 @@ function circleProgressSVG(pct, color) {
   </svg>`;
 }
 
-// ═══════════════════════════════════════════════════════════════════
-// COVER SYSTEM — serial queue, global dedup, 429 back-off, LS cache
-// Key rules:
-//   • coverCache[id] = url string  → already fetched, has image
-//   • coverCache[id] = null        → fetched, no image found
-//   • coverCache[id] = undefined   → not yet fetched
-//   • _cvScheduled                 → GLOBAL set, never cleared, prevents
-//                                    re-queuing on every Firestore update
-// ═══════════════════════════════════════════════════════════════════
-const coverCache   = {};          // id → url | null | undefined
-const _cvScheduled = new Set();   // ids already enqueued (NEVER cleared)
-const _cvQueue     = [];          // pending fetch tasks
-let   _cvRunning   = false;       // queue drain in progress
-let   _cv429Until  = 0;           // epoch ms — pause fetching until this time
+// ═══════════════════════════════════════════════════════════════
+// COVER SYSTEM v3 — Firestore-first persistence
+//
+// Flow:
+//   1st visit:  API fetch → save URL to Firestore book.coverUrl field
+//   All future: onSnapshot returns coverUrl already → 0 API calls
+//   localStorage: secondary speed cache for instant render
+//   _cvScheduled: global Set, NEVER cleared, prevents duplicate fetches
+//   429 back-off: pause 90s, then retry from queue
+// ═══════════════════════════════════════════════════════════════
+const coverCache   = {};        // id → url | null | undefined
+const _cvScheduled = new Set(); // ids enqueued THIS SESSION — never cleared
+const _cvQueue     = [];
+let   _cvRunning   = false;
+let   _cv429Until  = 0;
 
 function _lsCovers() {
   try { return JSON.parse(localStorage.getItem('pageturn_covers') || '{}'); } catch(e) { return {}; }
 }
-function _lsSave(id, url) {
+function _lsSaveCover(id, url) {
   try { const s = _lsCovers(); s[id] = url; localStorage.setItem('pageturn_covers', JSON.stringify(s)); } catch(e) {}
 }
 
-async function _cvDrainQueue() {
+async function _cvDrain() {
   if (_cvRunning) return;
   _cvRunning = true;
   while (_cvQueue.length) {
-    // Respect 429 back-off
     const wait = _cv429Until - Date.now();
     if (wait > 0) await new Promise(r => setTimeout(r, wait));
-
     const task = _cvQueue.shift();
     await task();
-
-    // 1.2 s between requests to stay well under rate limit
     if (_cvQueue.length) await new Promise(r => setTimeout(r, 1200));
   }
   _cvRunning = false;
 }
 
-function _cvEnqueue(task) {
-  _cvQueue.push(task);
-  _cvDrainQueue();
-}
-
-async function _doApiFetch(book) {
+async function _apiFetch(book) {
   try {
     const q   = encodeURIComponent(book.title + ' ' + book.author);
     const res = await fetch(`https://www.googleapis.com/books/v1/volumes?q=${q}&maxResults=1&fields=items(volumeInfo(imageLinks))`);
     if (res.status === 429) {
-      // Back off 90 seconds, put book back at front of queue to retry
       _cv429Until = Date.now() + 90000;
-      console.warn('[Cover] 429 — pausing 90s');
-      _cvQueue.unshift(() => _doApiFetch(book).then(url => _swapAllPending(book.id, url)));
+      console.warn('[Cover] 429 — pausing 90s, will retry');
+      // Re-add to front of queue for retry
+      _cvScheduled.delete(book.id);
+      _cvQueue.unshift(() => _scheduleBook(book));
       return null;
     }
     const data = await res.json();
     const img  = data?.items?.[0]?.volumeInfo?.imageLinks;
-    const url  = (img?.extraLarge || img?.large || img?.medium || img?.thumbnail || '').replace('http:', 'https:');
-    coverCache[book.id] = url || null;
-    if (url) _lsSave(book.id, url);
+    const url  = (img?.extraLarge||img?.large||img?.medium||img?.thumbnail||'').replace('http:','https:');
+    if (url) {
+      coverCache[book.id] = url;
+      _lsSaveCover(book.id, url);
+      // ★ Save to Firestore so future visits need 0 API calls
+      if (!useLocal && db) {
+        db.collection('books').doc(book.id).update({ coverUrl: url }).catch(() => {});
+      }
+      _swapAll(book.id, url);
+    } else {
+      coverCache[book.id] = null;
+    }
     return url || null;
-  } catch(e) {
-    coverCache[book.id] = null;
-    return null;
-  }
+  } catch(e) { coverCache[book.id] = null; return null; }
 }
 
-// Swap ALL placeholder elements for this book id (home + history + library may all show it)
-function _swapAllPending(id, url) {
-  if (!url) return;
+function _scheduleBook(book) {
+  if (_cvScheduled.has(book.id)) return;
+  _cvScheduled.add(book.id);
+  _cvQueue.push(() => _apiFetch(book));
+  _cvDrain();
+}
+
+// Swap ALL placeholder elements for this book (may exist on multiple tabs/pages)
+function _swapAll(id, url) {
   const uid = 'cv_' + id.replace(/[^a-z0-9]/gi, '_');
-  document.querySelectorAll(`[id="${uid}"]`).forEach(el => _injectImg(el, url, el.className));
+  document.querySelectorAll('#' + uid).forEach(el => {
+    const img = document.createElement('img');
+    img.src = url; img.className = el.className.replace(/\s*id=\S+/,''); img.loading='lazy';
+    img.style.cssText = 'opacity:0;transition:opacity 0.4s ease';
+    img.onload  = () => { img.style.opacity='1'; };
+    img.onerror = () => img.remove();
+    el.parentNode.insertBefore(img, el);
+    el.style.display = 'none';
+  });
 }
 
-function _injectImg(el, url, cls) {
-  const img = document.createElement('img');
-  img.src = url; img.className = cls; img.loading = 'lazy';
-  img.style.cssText = 'opacity:0;transition:opacity 0.4s ease';
-  img.onload  = () => { img.style.opacity = '1'; };
-  img.onerror = () => img.remove();
-  el.parentNode.insertBefore(img, el);
-  el.style.display = 'none';
-}
-
-function _makePlaceholder(book, cls) {
+function _makePH(book, cls) {
   const CC = {'Self Development':'#059669','Biography':'#7c3aed','Trading':'#d97706',
-              'Relationship':'#db2777','Mindset':'#0284c7','Finance':'#16a34a',
-              'Health':'#dc2626','Other':'#6b7280'};
-  const words   = (book.title || '').split(' ').filter(Boolean);
-  const initials = words.length >= 2
-    ? (words[0][0] + words[words.length-1][0]).toUpperCase()
-    : (words[0] || '?').slice(0, 2).toUpperCase();
-  const col   = CC[book.category] || CC.Other;
-  const short = book.title.length > 16 ? book.title.slice(0, 14) + '…' : book.title;
-  return `<div class="${cls}" style="overflow:hidden">
-    <div style="width:100%;height:100%;background:linear-gradient(160deg,${col}dd,${col}88);
-      display:flex;flex-direction:column;align-items:center;justify-content:center;
-      border-left:4px solid rgba(0,0,0,0.3);box-sizing:border-box;padding:4px;
-      text-align:center;border-radius:inherit">
-      <span style="font-size:1.2rem;font-weight:900;color:rgba(255,255,255,0.95);line-height:1">${initials}</span>
-      <span style="font-size:0.45rem;color:rgba(255,255,255,0.75);margin-top:3px;line-height:1.2;word-break:break-word">${short}</span>
-    </div></div>`;
+    'Relationship':'#db2777','Mindset':'#0284c7','Finance':'#16a34a','Health':'#dc2626','Other':'#6b7280'};
+  const w = (book.title||'').split(' ').filter(Boolean);
+  const ini = w.length>=2?(w[0][0]+w[w.length-1][0]).toUpperCase():(w[0]||'?').slice(0,2).toUpperCase();
+  const col = CC[book.category]||CC.Other;
+  const sh  = book.title.length>16?book.title.slice(0,14)+'…':book.title;
+  return `<div class="${cls}" style="overflow:hidden"><div style="width:100%;height:100%;background:linear-gradient(160deg,${col}dd,${col}88);display:flex;flex-direction:column;align-items:center;justify-content:center;border-left:4px solid rgba(0,0,0,0.3);box-sizing:border-box;padding:4px;text-align:center;border-radius:inherit"><span style="font-size:1.2rem;font-weight:900;color:rgba(255,255,255,0.95);line-height:1">${ini}</span><span style="font-size:0.45rem;color:rgba(255,255,255,0.75);margin-top:3px;line-height:1.2;word-break:break-word">${sh}</span></div></div>`;
 }
 
 function coverThumb(book, cls, placeholderClass) {
-  // 1. Check localStorage first (persists across sessions)
-  const ls = _lsCovers();
-  if (ls[book.id] && !coverCache[book.id]) coverCache[book.id] = ls[book.id];
-  if (book.cover  && !coverCache[book.id]) coverCache[book.id] = book.cover;
-
-  const cached = coverCache[book.id];  // url | null | undefined
-
-  // Already have a URL → render image directly (no API call ever)
-  if (cached) {
-    const ph = _makePlaceholder(book, placeholderClass).replace(
-      `class="${placeholderClass}"`, `class="${placeholderClass}" style="display:none"`);
-    return `<img src="${cached}" class="${cls}" alt="${esc(book.title)}" loading="eager"
+  // Priority: Firestore field → localStorage → in-memory cache
+  const ls  = _lsCovers();
+  const url = book.coverUrl || ls[book.id] || coverCache[book.id] || null;
+  if (url) {
+    coverCache[book.id] = url;
+    if (!ls[book.id]) _lsSaveCover(book.id, url); // warm up localStorage
+    const ph = _makePH(book, placeholderClass).replace(`class="${placeholderClass}"`, `class="${placeholderClass}" style="display:none"`);
+    return `<img src="${url}" class="${cls}" alt="${esc(book.title)}" loading="eager"
       onerror="this.style.display='none';this.nextElementSibling.style.display='flex'" />${ph}`;
   }
-
-  // cached === null means we already tried and found nothing → just show placeholder
-  if (cached === null) return _makePlaceholder(book, placeholderClass);
-
-  // cached === undefined → schedule ONE fetch (global dedup via _cvScheduled)
+  // coverCache[id] === null means already tried, no image exists
+  if (coverCache[book.id] === null) return _makePH(book, placeholderClass);
+  // Schedule one fetch — _cvScheduled prevents any duplicates
   const uid = 'cv_' + book.id.replace(/[^a-z0-9]/gi, '_');
-  if (!_cvScheduled.has(book.id)) {
-    _cvScheduled.add(book.id);
-    _cvEnqueue(async () => {
-      const url = await _doApiFetch(book);
-      _swapAllPending(book.id, url);
-    });
-  }
-  // Return placeholder with the uid so _swapAllPending can find it
-  return _makePlaceholder(book, placeholderClass).replace(
-    `class="${placeholderClass}"`, `class="${placeholderClass}" id="${uid}"`);
+  _scheduleBook(book);
+  return _makePH(book, placeholderClass).replace(`class="${placeholderClass}"`, `class="${placeholderClass}" id="${uid}"`);
 }
 
-// Legacy alias
-function fetchAndSwapCover(book, uid, cls, placeholderClass) {
-  // no-op: new system handles everything inside coverThumb
-}
+// Legacy no-op
+function fetchAndSwapCover() {}
 
 // ---- Render Home ----
 function renderHome() {
@@ -1548,7 +1530,7 @@ function renderHome() {
     </div>`;
   }).join('');
 
-  // auto-save via onblur/onkeydown on inputs
+  // auto-save via onblur/onkeydown
 }
 
 // ---- Render Library ----
@@ -2130,8 +2112,8 @@ self.addEventListener('fetch', e => {
         await Promise.all(keys.map(k => caches.delete(k)));
       } catch(e) {}
       try {
-        const reg = await navigator.serviceWorker.register('./sw.js');
-        console.log('[SW] ✅ Registered, scope:', reg.scope);
+        await navigator.serviceWorker.register('./sw.js');
+        console.log('[SW] ✅ Registered');
       } catch(e) { console.warn('[SW] Failed:', e.message); }
     });
   }
