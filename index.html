@@ -994,8 +994,6 @@ function lsSave(data) { localStorage.setItem(LS_KEY, JSON.stringify(data)); }
 // ---- State ----
 let books = [];
 let goal = { year: new Date().getFullYear(), target: 20 };
-// Clear old Google Books cover cache on first load so Open Library fetches fresh
-try{const _c=JSON.parse(localStorage.getItem('pageturn_covers')||'{}');if(Object.keys(_c).length&&!localStorage.getItem('pt_ol_migrated')){localStorage.removeItem('pageturn_covers');localStorage.setItem('pt_ol_migrated','1');}}catch(e){}
 let catFilter = 'all';
 let coverDataUrl = null; // temp for new book
 
@@ -1070,7 +1068,6 @@ async function loadData() {
       const gs = await db.collection('settings').doc('goal').get();
       if (gs.exists) goal = gs.data();
 
-      // Restore saved page before first render
       const _sp = sessionStorage.getItem('pt_page') || 'home';
       document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
       document.querySelectorAll('[data-page]').forEach(l => l.classList.remove('active'));
@@ -1079,17 +1076,17 @@ async function loadData() {
 
       db.collection('books').onSnapshot(snapshot => {
         const covers = JSON.parse(localStorage.getItem('pageturn_covers') || '{}');
-        books = snapshot.docs.map(d => ({ id: d.id, ...d.data(), cover: covers[d.id] || null }));
+        books = snapshot.docs.map(d => ({ id: d.id, ...d.data(), cover: covers[d.id]||null }));
         books.forEach(async b => {
-          if (b.status === 'reading' && b.totalPages > 0 && b.currentPage >= b.totalPages) {
-            b.status = 'completed'; b.endDate = b.endDate || todayStr(); await saveBook(b);
+          if (b.status==='reading' && b.totalPages>0 && b.currentPage>=b.totalPages) {
+            b.status='completed'; b.endDate=b.endDate||todayStr(); await saveBook(b);
           }
         });
         const activePage = document.querySelector('.page.active')?.id?.replace('page-','');
-        if (activePage === 'home')         { renderHome(); renderHistory(); }
-        else if (activePage === 'library') { renderLibrary(); }
-        else if (activePage === 'history') { renderHistory(); renderHome(); }
-        else if (activePage === 'stats')   { renderStats(); }
+        if (activePage==='home')         { renderHome(); renderHistory(); }
+        else if (activePage==='library') { renderLibrary(); }
+        else if (activePage==='history') { renderHistory(); renderHome(); }
+        else if (activePage==='stats')   { renderStats(); }
         updateGoalCard();
       }, err => {
         console.error('Firestore listener failed:', err);
@@ -1246,7 +1243,7 @@ function closeGoalModal() {
 }
 function updateGoalCard() {
   const currentYear = new Date().getFullYear();
-  const done = books.filter(b => b.status === 'completed' && new Date(b.endDate || '').getFullYear() === currentYear).length;
+  const done = books.filter(b => b.status === 'completed' && new Date(b.endDate||'').getFullYear() === currentYear).length;
   const pct  = goal.target > 0 ? Math.min(100, (done / goal.target) * 100) : 0;
   document.getElementById('goal-year').textContent      = goal.year;
   document.getElementById('goal-completed').textContent = String(done).padStart(2, '0');
@@ -1289,14 +1286,14 @@ async function updatePage(bookId, newPage) {
   const log = book.pageLogs.find(l => l.date === today);
   if (log) log.page = newPage; else book.pageLogs.push({ date: today, page: newPage });
   if (book.totalPages > 0 && newPage >= book.totalPages) {
-    book.status = 'completed'; book.endDate = today;
+    book.status='completed'; book.endDate=today;
     await saveBook(book); updateGoalCard(); renderHome(); renderHistory();
     showCelebration(book); return;
   }
   await saveBook(book); renderHome(); showToast('✅ Progress saved!');
 }
 window.handlePageBlur = function(id) {
-  const inp = document.getElementById('pi-' + id);
+  const inp = document.getElementById('pi-'+id);
   if (!inp) return;
   const v = parseInt(inp.value);
   if (!isNaN(v)) updatePage(id, v);
@@ -1304,7 +1301,7 @@ window.handlePageBlur = function(id) {
 window.completeBook = async function(id) {
   const book = books.find(b => b.id === id);
   if (!book) return;
-  book.status = 'completed'; book.currentPage = book.totalPages; book.endDate = todayStr();
+  book.status='completed'; book.currentPage=book.totalPages; book.endDate=todayStr();
   await saveBook(book); updateGoalCard(); renderHome(); renderHistory(); showCelebration(book);
 };
 function spawnConfetti() {
@@ -1358,93 +1355,102 @@ function circleProgressSVG(pct, color) {
   </svg>`;
 }
 
-// ---- Cover HTML ----
-// ---- Cover cache (in-memory for session) ----
+// ── Cover system: Google Books API, serial queue (600ms gap), dedup, localStorage cache ──
 const coverCache = {};
+const _cvQueue = [];
+let _cvRunning = false;
 
-// ── Cover system: Open Library (no rate limits) + localStorage cache ──
-const coverFetching = {};
-
-async function fetchCoverURL(book) {
-  if (book.cover) { coverCache[book.id] = book.cover; return book.cover; }
-  if (coverCache[book.id] !== undefined) return coverCache[book.id];
-  try {
-    const stored = JSON.parse(localStorage.getItem('pageturn_covers') || '{}');
-    if (stored[book.id]) { coverCache[book.id] = stored[book.id]; return stored[book.id]; }
-  } catch(e) {}
-  // Dedup: if already fetching this book, wait for same promise
-  if (coverFetching[book.id]) return coverFetching[book.id];
-
-  coverFetching[book.id] = (async () => {
-    try {
-      // Open Library Search API — no key, no rate limits
-      const q = encodeURIComponent(book.title + ' ' + book.author);
-      const res = await fetch(`https://openlibrary.org/search.json?q=${q}&limit=1&fields=cover_i`);
-      if (!res.ok) throw new Error('ol_fail');
-      const data = await res.json();
-      const coverId = data?.docs?.[0]?.cover_i;
-      const url = coverId ? `https://covers.openlibrary.org/b/id/${coverId}-M.jpg` : null;
-      coverCache[book.id] = url || null;
-      if (url) {
-        try {
-          const stored = JSON.parse(localStorage.getItem('pageturn_covers') || '{}');
-          stored[book.id] = url;
-          localStorage.setItem('pageturn_covers', JSON.stringify(stored));
-        } catch(e) {}
-      }
-      return url || null;
-    } catch(e) {
-      coverCache[book.id] = null;
-      return null;
-    } finally {
-      delete coverFetching[book.id];
-    }
-  })();
-  return coverFetching[book.id];
+function _cvEnqueue(fn) {
+  return new Promise(resolve => {
+    _cvQueue.push(() => fn().then(resolve).catch(() => resolve(null)));
+    if (!_cvRunning) _cvDrain();
+  });
+}
+async function _cvDrain() {
+  _cvRunning = true;
+  while (_cvQueue.length) {
+    const task = _cvQueue.shift();
+    await task();
+    if (_cvQueue.length) await new Promise(r => setTimeout(r, 600));
+  }
+  _cvRunning = false;
 }
 
-function makePlaceholder(book, cls) {
-  const CC = {'Self Development':'#059669','Biography':'#7c3aed','Trading':'#d97706','Relationship':'#db2777','Mindset':'#0284c7','Finance':'#16a34a','Health':'#dc2626','Other':'#6b7280'};
-  const words = (book.title||'').split(' ').filter(Boolean);
-  const initials = words.length>=2 ? (words[0][0]+words[words.length-1][0]).toUpperCase() : (words[0]||'?').slice(0,2).toUpperCase();
-  const col = CC[book.category]||CC.Other;
-  const short = (book.title||'').length>16 ? (book.title||'').slice(0,14)+'…' : (book.title||'');
+const _cvInFlight = {};
+
+function _lsGetCovers() {
+  try { return JSON.parse(localStorage.getItem('pageturn_covers') || '{}'); } catch(e) { return {}; }
+}
+function _lsSaveCover(id, url) {
+  try { const s=_lsGetCovers(); s[id]=url; localStorage.setItem('pageturn_covers', JSON.stringify(s)); } catch(e) {}
+}
+
+async function fetchCoverURL(book) {
+  if (book.cover) { coverCache[book.id]=book.cover; return book.cover; }
+  if (coverCache[book.id] !== undefined) return coverCache[book.id];
+  const ls = _lsGetCovers();
+  if (ls[book.id]) { coverCache[book.id]=ls[book.id]; return ls[book.id]; }
+  if (_cvInFlight[book.id]) return _cvInFlight[book.id];
+
+  _cvInFlight[book.id] = _cvEnqueue(async () => {
+    try {
+      const q = encodeURIComponent(book.title + ' ' + book.author);
+      const res = await fetch(`https://www.googleapis.com/books/v1/volumes?q=${q}&maxResults=1&fields=items(volumeInfo(imageLinks))`);
+      if (res.status === 429) { coverCache[book.id]=null; return null; }
+      const data = await res.json();
+      const img = data?.items?.[0]?.volumeInfo?.imageLinks;
+      const url = (img?.extraLarge||img?.large||img?.medium||img?.thumbnail||'').replace('http:','https:');
+      coverCache[book.id] = url || null;
+      if (url) _lsSaveCover(book.id, url);
+      return url || null;
+    } catch(e) { coverCache[book.id]=null; return null; }
+    finally { delete _cvInFlight[book.id]; }
+  });
+  return _cvInFlight[book.id];
+}
+
+function _makePlaceholder(book, cls) {
+  const CC={'Self Development':'#059669','Biography':'#7c3aed','Trading':'#d97706','Relationship':'#db2777','Mindset':'#0284c7','Finance':'#16a34a','Health':'#dc2626','Other':'#6b7280'};
+  const words=(book.title||'').split(' ').filter(Boolean);
+  const initials=words.length>=2?(words[0][0]+words[words.length-1][0]).toUpperCase():(words[0]||'?').slice(0,2).toUpperCase();
+  const col=CC[book.category]||CC.Other;
+  const short=(book.title||'').length>16?(book.title||'').slice(0,14)+'…':(book.title||'');
   return `<div class="${cls}" style="overflow:hidden"><div style="width:100%;height:100%;background:linear-gradient(160deg,${col}dd,${col}88);display:flex;flex-direction:column;align-items:center;justify-content:center;border-left:4px solid rgba(0,0,0,0.3);box-sizing:border-box;padding:4px;text-align:center;border-radius:inherit"><span style="font-size:1.2rem;font-weight:900;color:rgba(255,255,255,0.95);line-height:1">${initials}</span><span style="font-size:0.45rem;color:rgba(255,255,255,0.75);margin-top:3px;line-height:1.2;word-break:break-word">${short}</span></div></div>`;
 }
 
 function coverThumb(book, cls, placeholderClass) {
   const cached = coverCache[book.id] !== undefined ? coverCache[book.id] :
-    book.cover || (() => { try { return JSON.parse(localStorage.getItem('pageturn_covers')||'{}')[book.id]||null; } catch(e){return null;} })();
+    (_lsGetCovers()[book.id] || book.cover || null);
   if (cached) {
     coverCache[book.id] = cached;
+    const ph = _makePlaceholder(book, placeholderClass).replace(`class="${placeholderClass}"`,`class="${placeholderClass}" style="display:none"`);
     return `<img src="${cached}" class="${cls}" alt="${esc(book.title)}" loading="eager"
-      onerror="this.style.display='none';this.nextElementSibling.style.display='flex'" />
-      ${makePlaceholder(book, placeholderClass).replace(`class="${placeholderClass}"`, `class="${placeholderClass}" style="display:none"`)}`;
+      onerror="this.style.display='none';this.nextElementSibling.style.display='flex'" />${ph}`;
   }
-  const uid = 'cv_' + book.id.replace(/[^a-z0-9]/gi,'_');
-  if (!coverFetching[book.id]) setTimeout(() => fetchAndSwapCover(book, uid, cls, placeholderClass), 0);
-  return makePlaceholder(book, placeholderClass).replace(`class="${placeholderClass}"`, `class="${placeholderClass}" id="${uid}"`);
+  const uid = 'cv_'+book.id.replace(/[^a-z0-9]/gi,'_');
+  if (!_cvInFlight[book.id]) setTimeout(() => _fetchAndSwap(book, uid, cls, placeholderClass), 0);
+  return _makePlaceholder(book, placeholderClass).replace(`class="${placeholderClass}"`,`class="${placeholderClass}" id="${uid}"`);
 }
 
-async function fetchAndSwapCover(book, uid, cls, placeholderClass) {
+async function _fetchAndSwap(book, uid, cls, placeholderClass) {
   const url = await fetchCoverURL(book);
   if (!url) return;
   const el = document.getElementById(uid);
   if (!el) return;
   const img = document.createElement('img');
-  img.src = url; img.className = cls; img.alt = book.title; img.loading = 'lazy';
-  img.style.cssText = 'opacity:0;transition:opacity 0.4s ease';
-  img.onload = () => { img.style.opacity = '1'; };
-  img.onerror = () => { img.remove(); if(el) el.style.display='flex'; };
+  img.src=url; img.className=cls; img.alt=book.title; img.loading='lazy';
+  img.style.cssText='opacity:0;transition:opacity 0.4s ease';
+  img.onload=()=>{ img.style.opacity='1'; };
+  img.onerror=()=>{ img.remove(); if(el) el.style.display='flex'; };
   el.parentNode.insertBefore(img, el);
-  el.style.display = 'none';
+  el.style.display='none';
 }
 
 // ---- Render Home ----
 function renderHome() {
   updateGoalCard();
   const today = todayStr();
-  const reading = books.filter(b => b.status === 'reading' && (!b.startDate || b.startDate <= today) && b.currentPage < b.totalPages);
+  const reading = books.filter(b => b.status==='reading' && (!b.startDate||b.startDate<=today) && b.currentPage<b.totalPages);
   const container = document.getElementById('current-books-container');
 
   if (!reading.length) {
@@ -1457,7 +1463,7 @@ function renderHome() {
     const color = CAT_COLORS[book.category] || '#38bdf8';
     const catClass = 'cat-' + (book.category || '').replace(/ /g, '\\ ');
 
-    const daysReading = book.startDate ? Math.max(1,Math.round((new Date()-new Date(book.startDate))/86400000)+1) : null;
+    const daysReading = book.startDate?Math.max(1,Math.round((new Date()-new Date(book.startDate))/86400000)+1):null;
     return `
     <div class="book-card">
       <div class="book-card-top">
@@ -1469,8 +1475,8 @@ function renderHome() {
           </div>
           <div class="book-title-text">${esc(book.title)}</div>
           <div class="book-author-text">by ${esc(book.author)}</div>
-          ${daysReading ? `<div class="last-read-label">📅 Day ${daysReading} of reading</div>` : ''}
-          ${lastReadLabel(book) ? `<div class="last-read-label">🕐 ${lastReadLabel(book)}</div>` : ''}
+          ${daysReading?`<div class="last-read-label">📅 Day ${daysReading} of reading</div>`:''}
+          ${lastReadLabel(book)?`<div class="last-read-label">🕐 ${lastReadLabel(book)}</div>`:''}
         </div>
       </div>
       <div class="progress-row">
@@ -1482,8 +1488,7 @@ function renderHome() {
           <div class="page-update-row">
             <input type="number" class="page-input" id="pi-${book.id}"
               value="${book.currentPage}" min="0" max="${book.totalPages}"
-              onblur="handlePageBlur('${book.id}')"
-              onkeydown="if(event.key==='Enter')this.blur()" />
+              onblur="handlePageBlur('${book.id}')" onkeydown="if(event.key==='Enter')this.blur()" />
             <span class="page-of">/ ${book.totalPages} pages</span>
           </div>
           <div class="page-hint">Tap outside to save · last page auto-completes 🎉</div>
@@ -1499,7 +1504,7 @@ function renderHome() {
 function renderLibrary() {
   const container = document.getElementById('library-books-container');
   const today = todayStr();
-  let list = books.filter(b => b.status === 'reading' && b.startDate && b.startDate > today);
+  let list = books.filter(b => b.status==='reading' && b.startDate && b.startDate>today);
   if (catFilter !== 'all') list = list.filter(b => b.category === catFilter);
 
   document.querySelectorAll('.filter-btn').forEach(btn => {
@@ -1602,8 +1607,8 @@ function renderYearlyChart(done) {
   const years={};done.forEach(b=>{if(!b.endDate)return;const yr=new Date(b.endDate).getFullYear();years[yr]=(years[yr]||0)+1;});
   const keys=Object.keys(years).sort();
   if(!keys.length){el.innerHTML='<div style="color:var(--text3);text-align:center;padding:1.5rem;font-size:0.85rem">No completed books yet</div>';return;}
-  const maxV=Math.max(...keys.map(k=>years[k]),1),H=100;
-  el.innerHTML='<div class="chart-bars">'+keys.map(yr=>{const v=years[yr],h=Math.round((v/maxV)*H);return`<div class="chart-col"><div class="chart-val">${v}</div><div class="chart-bar" style="height:${h}px;background:linear-gradient(180deg,#a78bfa,#7c3aed)"></div><div class="chart-month">${yr}</div></div>`;}).join('')+'</div>';
+  const maxV=Math.max(...keys.map(k=>years[k]),1);
+  el.innerHTML='<div class="chart-bars">'+keys.map(yr=>{const v=years[yr],h=Math.round((v/maxV)*100);return`<div class="chart-col"><div class="chart-val">${v}</div><div class="chart-bar" style="height:${h}px;background:linear-gradient(180deg,#a78bfa,#7c3aed)"></div><div class="chart-month">${yr}</div></div>`;}).join('')+'</div>';
 }
 function renderCategoryChart(done) {
   const el=document.getElementById('category-chart');if(!el)return;
@@ -2033,7 +2038,8 @@ function setupImport() {
 </script>
 <script>
 (function() {
-  const SW_CODE = `const CACHE = 'pageturn-v7';
+  // ── Register SW via Blob so it works on ANY path (GitHub Pages subdir safe) ──
+  const SW_CODE = `const CACHE = 'pageturn-v4';
 self.addEventListener('install', e => {
   self.skipWaiting();
   e.waitUntil(caches.open(CACHE).then(c => c.add('/')).catch(()=>{}));
@@ -2066,21 +2072,18 @@ self.addEventListener('fetch', e => {
 
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', async () => {
-      // ── Nuke ALL old service workers and caches first ──
+      // Nuke ALL old SWs and caches so stale index.html never loads again
       try {
         const regs = await navigator.serviceWorker.getRegistrations();
         await Promise.all(regs.map(r => r.unregister()));
         const keys = await caches.keys();
         await Promise.all(keys.map(k => caches.delete(k)));
       } catch(e) {}
-      // ── Register fresh SW via Blob (path-safe for GitHub Pages subdir) ──
       try {
-        const blob = new Blob([SW_CODE], {type: 'application/javascript'});
-        const blobUrl = URL.createObjectURL(blob);
-        const reg = await navigator.serviceWorker.register(blobUrl, {scope: './'});
-        console.log('[SW] ✅ Registered v7, scope:', reg.scope);
+        const reg = await navigator.serviceWorker.register('./sw.js');
+        console.log('[SW] ✅ Registered, scope:', reg.scope);
       } catch(e) {
-        console.warn('[SW] Registration failed:', e.message);
+        console.warn('[SW] Failed:', e.message);
       }
     });
   }
