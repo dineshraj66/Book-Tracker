@@ -1,5 +1,4 @@
-// sw.js v8 — clears all old caches on activation
-const CACHE = 'pageturn-v8';
+const CACHE = 'pageturn-v10';
 self.addEventListener('install', e => {
   self.skipWaiting();
   e.waitUntil(caches.open(CACHE).then(c => c.add('/')).catch(() => {}));
