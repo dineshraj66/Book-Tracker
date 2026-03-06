@@ -994,6 +994,8 @@ function lsSave(data) { localStorage.setItem(LS_KEY, JSON.stringify(data)); }
 // ---- State ----
 let books = [];
 let goal = { year: new Date().getFullYear(), target: 20 };
+// Clear old Google Books cover cache on first load so Open Library fetches fresh
+try{const _c=JSON.parse(localStorage.getItem('pageturn_covers')||'{}');if(Object.keys(_c).length&&!localStorage.getItem('pt_ol_migrated')){localStorage.removeItem('pageturn_covers');localStorage.setItem('pt_ol_migrated','1');}}catch(e){}
 let catFilter = 'all';
 let coverDataUrl = null; // temp for new book
 
@@ -1078,7 +1080,6 @@ async function loadData() {
       db.collection('books').onSnapshot(snapshot => {
         const covers = JSON.parse(localStorage.getItem('pageturn_covers') || '{}');
         books = snapshot.docs.map(d => ({ id: d.id, ...d.data(), cover: covers[d.id] || null }));
-        // Auto-fix: mark completed any book where currentPage >= totalPages
         books.forEach(async b => {
           if (b.status === 'reading' && b.totalPages > 0 && b.currentPage >= b.totalPages) {
             b.status = 'completed'; b.endDate = b.endDate || todayStr(); await saveBook(b);
@@ -1292,31 +1293,25 @@ async function updatePage(bookId, newPage) {
     await saveBook(book); updateGoalCard(); renderHome(); renderHistory();
     showCelebration(book); return;
   }
-  await saveBook(book); renderHome();
-  showToast('✅ Progress saved!');
+  await saveBook(book); renderHome(); showToast('✅ Progress saved!');
 }
-
 window.handlePageBlur = function(id) {
   const inp = document.getElementById('pi-' + id);
   if (!inp) return;
   const v = parseInt(inp.value);
   if (!isNaN(v)) updatePage(id, v);
 };
-
 window.completeBook = async function(id) {
   const book = books.find(b => b.id === id);
   if (!book) return;
   book.status = 'completed'; book.currentPage = book.totalPages; book.endDate = todayStr();
   await saveBook(book); updateGoalCard(); renderHome(); renderHistory(); showCelebration(book);
 };
-
 function spawnConfetti() {
   const colors=['#f59e0b','#10b981','#3b82f6','#ec4899','#8b5cf6','#ef4444'];
-  for(let i=0;i<80;i++){
-    const el=document.createElement('div'),size=Math.random()*8+6;
+  for(let i=0;i<80;i++){const el=document.createElement('div'),size=Math.random()*8+6;
     el.style.cssText=`position:fixed;top:-10px;left:${Math.random()*100}vw;width:${size}px;height:${size}px;background:${colors[Math.floor(Math.random()*colors.length)]};border-radius:${Math.random()>.5?'50%':'2px'};z-index:10000;pointer-events:none;animation:confettiFall ${1.5+Math.random()*2}s ease-in forwards;animation-delay:${Math.random()*.8}s`;
-    document.body.appendChild(el); setTimeout(()=>el.remove(),4000);
-  }
+    document.body.appendChild(el);setTimeout(()=>el.remove(),4000);}
 }
 function showCelebration(book) {
   const days=book.startDate?Math.max(1,Math.round((new Date()-new Date(book.startDate))/86400000)+1):null;
@@ -1367,26 +1362,8 @@ function circleProgressSVG(pct, color) {
 // ---- Cover cache (in-memory for session) ----
 const coverCache = {};
 
-// ── Cover system: rate-limited queue + in-flight dedup ──
+// ── Cover system: Open Library (no rate limits) + localStorage cache ──
 const coverFetching = {};
-const coverQueue = [];
-let coverQueueRunning = false;
-
-function enqueueCoverFetch(fn) {
-  return new Promise(resolve => {
-    coverQueue.push(() => fn().then(resolve));
-    if (!coverQueueRunning) drainCoverQueue();
-  });
-}
-async function drainCoverQueue() {
-  coverQueueRunning = true;
-  while (coverQueue.length) {
-    const task = coverQueue.shift();
-    await task();
-    if (coverQueue.length) await new Promise(r => setTimeout(r, 500));
-  }
-  coverQueueRunning = false;
-}
 
 async function fetchCoverURL(book) {
   if (book.cover) { coverCache[book.id] = book.cover; return book.cover; }
@@ -1395,26 +1372,34 @@ async function fetchCoverURL(book) {
     const stored = JSON.parse(localStorage.getItem('pageturn_covers') || '{}');
     if (stored[book.id]) { coverCache[book.id] = stored[book.id]; return stored[book.id]; }
   } catch(e) {}
+  // Dedup: if already fetching this book, wait for same promise
   if (coverFetching[book.id]) return coverFetching[book.id];
-  coverFetching[book.id] = enqueueCoverFetch(async () => {
+
+  coverFetching[book.id] = (async () => {
     try {
-      const q = encodeURIComponent(`${book.title} ${book.author}`);
-      const res = await fetch(`https://www.googleapis.com/books/v1/volumes?q=${q}&maxResults=1&fields=items(volumeInfo(imageLinks))`);
-      if (res.status === 429) { coverCache[book.id] = null; return null; }
+      // Open Library Search API — no key, no rate limits
+      const q = encodeURIComponent(book.title + ' ' + book.author);
+      const res = await fetch(`https://openlibrary.org/search.json?q=${q}&limit=1&fields=cover_i`);
+      if (!res.ok) throw new Error('ol_fail');
       const data = await res.json();
-      const img = data?.items?.[0]?.volumeInfo?.imageLinks;
-      const url = (img?.extraLarge || img?.large || img?.medium || img?.thumbnail || '').replace('http:', 'https:');
+      const coverId = data?.docs?.[0]?.cover_i;
+      const url = coverId ? `https://covers.openlibrary.org/b/id/${coverId}-M.jpg` : null;
       coverCache[book.id] = url || null;
       if (url) {
         try {
           const stored = JSON.parse(localStorage.getItem('pageturn_covers') || '{}');
-          stored[book.id] = url; localStorage.setItem('pageturn_covers', JSON.stringify(stored));
+          stored[book.id] = url;
+          localStorage.setItem('pageturn_covers', JSON.stringify(stored));
         } catch(e) {}
       }
       return url || null;
-    } catch(e) { coverCache[book.id] = null; return null; }
-    finally { delete coverFetching[book.id]; }
-  });
+    } catch(e) {
+      coverCache[book.id] = null;
+      return null;
+    } finally {
+      delete coverFetching[book.id];
+    }
+  })();
   return coverFetching[book.id];
 }
 
@@ -1450,7 +1435,7 @@ async function fetchAndSwapCover(book, uid, cls, placeholderClass) {
   img.src = url; img.className = cls; img.alt = book.title; img.loading = 'lazy';
   img.style.cssText = 'opacity:0;transition:opacity 0.4s ease';
   img.onload = () => { img.style.opacity = '1'; };
-  img.onerror = () => { img.remove(); el.style.display='flex'; };
+  img.onerror = () => { img.remove(); if(el) el.style.display='flex'; };
   el.parentNode.insertBefore(img, el);
   el.style.display = 'none';
 }
@@ -1472,7 +1457,7 @@ function renderHome() {
     const color = CAT_COLORS[book.category] || '#38bdf8';
     const catClass = 'cat-' + (book.category || '').replace(/ /g, '\\ ');
 
-    const daysReading = book.startDate ? Math.max(1, Math.round((new Date()-new Date(book.startDate))/86400000)+1) : null;
+    const daysReading = book.startDate ? Math.max(1,Math.round((new Date()-new Date(book.startDate))/86400000)+1) : null;
     return `
     <div class="book-card">
       <div class="book-card-top">
@@ -1507,7 +1492,7 @@ function renderHome() {
     </div>`;
   }).join('');
 
-  // auto-save via onblur/onkeydown on each input
+  // auto-save via onblur/onkeydown
 }
 
 // ---- Render Library ----
@@ -1610,32 +1595,24 @@ function renderStats() {
   document.getElementById('stat-longest-streak').textContent  = streaks.longest  > 0 ? streaks.longest  + 'd' : '—';
   document.getElementById('stat-shortest-streak').textContent = streaks.current  > 0 ? streaks.current  + 'd' : '—';
 
-  renderChart(done);
-  renderYearlyChart(done);
-  renderCategoryChart(done);
+  renderChart(done); renderYearlyChart(done); renderCategoryChart(done);
 }
-
 function renderYearlyChart(done) {
-  const el=document.getElementById('yearly-chart'); if(!el) return;
-  const years={};
-  done.forEach(b=>{if(!b.endDate)return;const yr=new Date(b.endDate).getFullYear();years[yr]=(years[yr]||0)+1;});
+  const el=document.getElementById('yearly-chart');if(!el)return;
+  const years={};done.forEach(b=>{if(!b.endDate)return;const yr=new Date(b.endDate).getFullYear();years[yr]=(years[yr]||0)+1;});
   const keys=Object.keys(years).sort();
   if(!keys.length){el.innerHTML='<div style="color:var(--text3);text-align:center;padding:1.5rem;font-size:0.85rem">No completed books yet</div>';return;}
   const maxV=Math.max(...keys.map(k=>years[k]),1),H=100;
-  el.innerHTML='<div class="chart-bars">'+keys.map(yr=>{const v=years[yr],h=Math.round((v/maxV)*H);return `<div class="chart-col"><div class="chart-val">${v}</div><div class="chart-bar" style="height:${h}px;background:linear-gradient(180deg,#a78bfa,#7c3aed)"></div><div class="chart-month">${yr}</div></div>`;}).join('')+'</div>';
+  el.innerHTML='<div class="chart-bars">'+keys.map(yr=>{const v=years[yr],h=Math.round((v/maxV)*H);return`<div class="chart-col"><div class="chart-val">${v}</div><div class="chart-bar" style="height:${h}px;background:linear-gradient(180deg,#a78bfa,#7c3aed)"></div><div class="chart-month">${yr}</div></div>`;}).join('')+'</div>';
 }
-
 function renderCategoryChart(done) {
-  const el=document.getElementById('category-chart'); if(!el) return;
-  const cats={};
-  done.forEach(b=>{const c=b.category||'Other';cats[c]=(cats[c]||0)+1;});
+  const el=document.getElementById('category-chart');if(!el)return;
+  const cats={};done.forEach(b=>{const c=b.category||'Other';cats[c]=(cats[c]||0)+1;});
   const entries=Object.entries(cats).sort((a,b)=>b[1]-a[1]);
   if(!entries.length){el.innerHTML='<div style="color:var(--text3);text-align:center;padding:1.5rem;font-size:0.85rem">No completed books yet</div>';return;}
-  const maxV=entries[0][1];
-  const clr={'Self Development':'#34d399','Biography':'#a78bfa','Trading':'#fbbf24','Relationship':'#fb7185','Mindset':'#38bdf8','Finance':'#34d399','Health':'#f87171','Other':'#94a3b8'};
-  el.innerHTML='<div class="cat-chart">'+entries.map(([cat,cnt])=>{const pct=Math.round((cnt/maxV)*100),col=clr[cat]||'#38bdf8';return `<div class="cat-row"><div class="cat-row-label">${cat}</div><div class="cat-bar-track"><div class="cat-bar-fill" style="width:${pct}%;background:${col}"><span class="cat-bar-count">${cnt}</span></div></div></div>`;}).join('')+'</div>';
+  const maxV=entries[0][1],clr={'Self Development':'#34d399','Biography':'#a78bfa','Trading':'#fbbf24','Relationship':'#fb7185','Mindset':'#38bdf8','Finance':'#34d399','Health':'#f87171','Other':'#94a3b8'};
+  el.innerHTML='<div class="cat-chart">'+entries.map(([cat,cnt])=>{const pct=Math.round((cnt/maxV)*100),col=clr[cat]||'#38bdf8';return`<div class="cat-row"><div class="cat-row-label">${cat}</div><div class="cat-bar-track"><div class="cat-bar-fill" style="width:${pct}%;background:${col}"><span class="cat-bar-count">${cnt}</span></div></div></div>`;}).join('')+'</div>';
 }
-
 function calcStreaks() {
   const dates = new Set();
   books.forEach(b => (b.pageLogs||[]).forEach(l => dates.add(l.date)));
@@ -2056,8 +2033,7 @@ function setupImport() {
 </script>
 <script>
 (function() {
-  // ── Register SW via Blob so it works on ANY path (GitHub Pages subdir safe) ──
-  const SW_CODE = `const CACHE = 'pageturn-v6';
+  const SW_CODE = `const CACHE = 'pageturn-v7';
 self.addEventListener('install', e => {
   self.skipWaiting();
   e.waitUntil(caches.open(CACHE).then(c => c.add('/')).catch(()=>{}));
@@ -2090,21 +2066,21 @@ self.addEventListener('fetch', e => {
 
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', async () => {
+      // ── Nuke ALL old service workers and caches first ──
       try {
-        // Try registering the external sw.js first
-        const reg = await navigator.serviceWorker.register('./sw.js');
-        console.log('[SW] ✅ Registered via file, scope:', reg.scope);
+        const regs = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(regs.map(r => r.unregister()));
+        const keys = await caches.keys();
+        await Promise.all(keys.map(k => caches.delete(k)));
+      } catch(e) {}
+      // ── Register fresh SW via Blob (path-safe for GitHub Pages subdir) ──
+      try {
+        const blob = new Blob([SW_CODE], {type: 'application/javascript'});
+        const blobUrl = URL.createObjectURL(blob);
+        const reg = await navigator.serviceWorker.register(blobUrl, {scope: './'});
+        console.log('[SW] ✅ Registered v7, scope:', reg.scope);
       } catch(e) {
-        console.warn('[SW] File registration failed, trying blob:', e.message);
-        try {
-          // Fallback: register via Blob URL (works regardless of path)
-          const blob = new Blob([SW_CODE], {type: 'application/javascript'});
-          const blobUrl = URL.createObjectURL(blob);
-          const reg = await navigator.serviceWorker.register(blobUrl, {scope: './'});
-          console.log('[SW] ✅ Registered via blob, scope:', reg.scope);
-        } catch(e2) {
-          console.error('[SW] ❌ Both methods failed:', e2.message);
-        }
+        console.warn('[SW] Registration failed:', e.message);
       }
     });
   }
