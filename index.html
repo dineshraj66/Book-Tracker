@@ -1059,7 +1059,6 @@ async function loadData() {
         const covers = JSON.parse(localStorage.getItem('pageturn_covers') || '{}');
         books = snapshot.docs.map(d => {
           const data = d.data();
-          // Sanitize any stale cover URLs (e.g. "miss" from old Open Library code)
           const validUrl = u => u && typeof u === 'string' && u.startsWith('http') ? u : null;
           const cover = validUrl(covers[d.id]) || validUrl(data.coverUrl) || null;
           return { id: d.id, ...data, cover, coverUrl: undefined };
@@ -1436,6 +1435,7 @@ function renderHome() {
           </div>
           <div class="book-title-text">${esc(book.title)}</div>
           <div class="book-author-text">by ${esc(book.author)}</div>
+          ${book.startDate ? `<div class="last-read-label">📅 Day ${Math.max(1, Math.round((new Date() - new Date(book.startDate)) / 86400000) + 1)} of reading</div>` : ''}
           ${lastReadLabel(book) ? `<div class="last-read-label">🕐 Last read: ${lastReadLabel(book)}</div>` : ''}
         </div>
       </div>
