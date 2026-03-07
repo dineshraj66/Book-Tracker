@@ -1095,23 +1095,31 @@ async function loadData() {
 }
 
 async function saveBook(book) {
-  if (useLocal) {
-    const d = lsLoad();
-    const i = d.books.findIndex(b => b.id === book.id);
-    if (i >= 0) d.books[i] = book; else d.books.push(book);
-    lsSave(d);
-  } else {
-    // Save cover separately in localStorage (too large for Firestore)
-    if (book.cover) {
-      try {
-        const covers = JSON.parse(localStorage.getItem('pageturn_covers') || '{}');
-        covers[book.id] = book.cover;
-        localStorage.setItem('pageturn_covers', JSON.stringify(covers));
-      } catch(e) {}
+  try {
+    if (useLocal) {
+      const d = lsLoad();
+      const i = d.books.findIndex(b => b.id === book.id);
+      if (i >= 0) d.books[i] = book; else d.books.push(book);
+      lsSave(d);
+    } else {
+      // Save cover separately in localStorage (too large for Firestore)
+      if (book.cover) {
+        try {
+          const covers = JSON.parse(localStorage.getItem('pageturn_covers') || '{}');
+          covers[book.id] = book.cover;
+          localStorage.setItem('pageturn_covers', JSON.stringify(covers));
+        } catch(e) {}
+      }
+      // Strip cover + undefined fields before saving to Firestore
+      const { id, cover, coverUrl, ...rawData } = book;
+      // Remove undefined values (Firestore rejects them)
+      const data = Object.fromEntries(Object.entries(rawData).filter(([_, v]) => v !== undefined));
+      await db.collection('books').doc(id).set(data);
     }
-    // Strip cover before saving to Firestore
-    const { id, cover, ...data } = book;
-    await db.collection('books').doc(id).set(data);
+  } catch(err) {
+    console.error('[saveBook] failed:', err);
+    showToast('❌ Save failed: ' + (err.message || err));
+    throw err;
   }
 }
 
@@ -1237,7 +1245,6 @@ async function addBook() {
   const author    = document.getElementById('book-author').value.trim();
   const category  = document.getElementById('book-category').value;
   const totalPages= parseInt(document.getElementById('book-pages').value);
-  if (!category) { showToast('⚠️ Please select a category'); return; }
   const startDate = document.getElementById('book-start-date').value || todayStr();
 
   const book = {
@@ -1250,10 +1257,19 @@ async function addBook() {
     cover: coverDataUrl || null
   };
 
+  if (!title) { showToast('⚠️ Enter a book title'); return; }
+  if (!author) { showToast('⚠️ Enter an author name'); return; }
+  if (!category) { showToast('⚠️ Select a category'); return; }
+  if (!totalPages || isNaN(totalPages)) { showToast('⚠️ Enter total pages'); return; }
+
   books.push(book);
-  await saveBook(book);
-  renderHome();
-  showToast('📖 "' + title + '" added!');
+  try {
+    await saveBook(book);
+    renderHome();
+    showToast('📖 "' + title + '" added!');
+  } catch(e) {
+    books.pop(); // rollback
+  }
 }
 
 // ---- Update Page ----
@@ -1718,12 +1734,9 @@ function setupEditModal() {
     const book = books.find(b => b.id === id);
     if (!book) return;
 
-    const _cat = document.getElementById('edit-category').value;
-    if (!_cat) { showToast('⚠️ Please select a category'); return; }
-
     book.title      = document.getElementById('edit-title').value.trim();
     book.author     = document.getElementById('edit-author').value.trim();
-    book.category   = _cat;
+    book.category   = document.getElementById('edit-category').value;
     book.totalPages = parseInt(document.getElementById('edit-pages').value) || book.totalPages;
     book.startDate  = document.getElementById('edit-start-date').value || null;
     book.endDate    = document.getElementById('edit-end-date').value || null;
@@ -1732,10 +1745,12 @@ function setupEditModal() {
     if (book.status === 'completed' && !book.endDate) book.endDate = todayStr();
     if (book.status === 'completed') book.currentPage = book.totalPages;
 
-    await saveBook(book);
-    overlay.classList.remove('open');
-    showToast('✅ Book updated!');
-    renderHome(); renderHistory(); renderLibrary(); updateGoalCard();
+    try {
+      await saveBook(book);
+      overlay.classList.remove('open');
+      showToast('✅ Book updated!');
+      renderHome(); renderHistory(); renderLibrary(); updateGoalCard();
+    } catch(e) { /* saveBook already shows toast */ }
   });
 
   delBtn.addEventListener('click', async () => {
