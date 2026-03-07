@@ -1102,7 +1102,6 @@ async function saveBook(book) {
       if (i >= 0) d.books[i] = book; else d.books.push(book);
       lsSave(d);
     } else {
-      // Save cover separately in localStorage (too large for Firestore)
       if (book.cover) {
         try {
           const covers = JSON.parse(localStorage.getItem('pageturn_covers') || '{}');
@@ -1110,10 +1109,10 @@ async function saveBook(book) {
           localStorage.setItem('pageturn_covers', JSON.stringify(covers));
         } catch(e) {}
       }
-      // Strip cover + undefined fields before saving to Firestore
-      const { id, cover, coverUrl, ...rawData } = book;
-      // Remove undefined values (Firestore rejects them)
-      const data = Object.fromEntries(Object.entries(rawData).filter(([_, v]) => v !== undefined));
+      const { id, cover, ...raw } = book;
+      // Remove undefined values and legacy coverUrl field
+      const data = JSON.parse(JSON.stringify(raw, (k, v) => v === undefined ? null : v));
+      delete data.coverUrl;
       await db.collection('books').doc(id).set(data);
     }
   } catch(err) {
@@ -1257,44 +1256,35 @@ async function addBook() {
     cover: coverDataUrl || null
   };
 
-  if (!title) { showToast('⚠️ Enter a book title'); return; }
-  if (!author) { showToast('⚠️ Enter an author name'); return; }
-  if (!category) { showToast('⚠️ Select a category'); return; }
-  if (!totalPages || isNaN(totalPages)) { showToast('⚠️ Enter total pages'); return; }
-
   books.push(book);
-  try {
-    await saveBook(book);
-    renderHome();
-    showToast('📖 "' + title + '" added!');
-  } catch(e) {
-    books.pop(); // rollback
-  }
+  await saveBook(book);
+  renderHome();
+  showToast('📖 "' + title + '" added!');
 }
 
 // ---- Update Page ----
 async function updatePage(bookId, newPage) {
   const book = books.find(b => b.id === bookId);
   if (!book) return;
-  newPage = Math.max(0, Math.min(newPage, book.totalPages));
-  book.currentPage = newPage;
+  const v = parseInt(newPage);
+  if (isNaN(v) || v === book.currentPage) return; // no change, skip
+  const clamped = Math.max(0, Math.min(v, book.totalPages));
+  book.currentPage = clamped;
   book.lastUpdated = new Date().toISOString();
   const today = todayStr();
   const log = book.pageLogs.find(l => l.date === today);
-  if (log) log.page = newPage; else book.pageLogs.push({ date: today, page: newPage });
-  if (book.totalPages > 0 && newPage >= book.totalPages) {
+  if (log) log.page = clamped; else book.pageLogs.push({ date: today, page: clamped });
+  if (book.totalPages > 0 && clamped >= book.totalPages) {
     book.status = 'completed';
     book.endDate = today;
     await saveBook(book);
-    updateGoalCard();
-    renderHome();
-    renderHistory();
+    updateGoalCard(); renderHome(); renderHistory();
     showToast('🏆 Book completed! Amazing!');
     return;
   }
   await saveBook(book);
   renderHome();
-  showToast('✅ Progress updated!');
+  showToast('✅ Page ' + clamped + ' saved!');
 }
 
 window.handlePageUpdate = function(id) {
@@ -1312,9 +1302,7 @@ window.completeBook = async function(id) {
   book.currentPage = book.totalPages;
   book.endDate = todayStr();
   await saveBook(book);
-  updateGoalCard();
-  renderHome();
-  renderHistory();
+  updateGoalCard(); renderHome(); renderHistory();
   showToast('🏆 Book completed! Amazing!');
 };
 
@@ -1466,15 +1454,15 @@ function renderHome() {
           <div class="page-update-row">
             <input type="number" class="page-input" id="pi-${book.id}"
               value="${book.currentPage}" min="0" max="${book.totalPages}"
+              onblur="handlePageUpdate('${book.id}')"
               onkeydown="if(event.key==='Enter'){handlePageUpdate('${book.id}');this.blur();}" />
             <span class="page-of">/ ${book.totalPages} pages</span>
-          </div>
         </div>
       </div>
     </div>`;
   }).join('');
 
-  // page input saves on Enter via inline onkeydown
+  // input saves on blur and Enter
 }
 
 // ---- Render Library ----
@@ -1750,7 +1738,10 @@ function setupEditModal() {
       overlay.classList.remove('open');
       showToast('✅ Book updated!');
       renderHome(); renderHistory(); renderLibrary(); updateGoalCard();
-    } catch(e) { /* saveBook already shows toast */ }
+    } catch(e) {
+      overlay.classList.remove('open');
+      // saveBook already shows error toast
+    }
   });
 
   delBtn.addEventListener('click', async () => {
