@@ -1076,14 +1076,13 @@ async function loadData() {
       if (_pe) { _pe.classList.add('active'); document.querySelectorAll(`[data-page="${_sp}"]`).forEach(l => l.classList.add('active')); }
 
       db.collection('books').onSnapshot(snapshot => {
-        const lsCovers = JSON.parse(localStorage.getItem('pageturn_covers') || '{}');
+        const lsC = _lsCovers();
         books = snapshot.docs.map(d => {
           const data = d.data();
-          // coverUrl saved in Firestore — warm up local cache
-          if (data.coverUrl && !lsCovers[d.id]) {
-            try { lsCovers[d.id]=data.coverUrl; localStorage.setItem('pageturn_covers', JSON.stringify(lsCovers)); } catch(e) {}
+          if (data.coverUrl && data.coverUrl !== 'miss') {
+            coverCache[d.id] = data.coverUrl;
+            if (!lsC[d.id]) _lsSave(d.id, data.coverUrl);
           }
-          if (data.coverUrl) coverCache[d.id] = data.coverUrl;
           return { id: d.id, ...data };
         });
         books.forEach(async b => {
@@ -1129,12 +1128,8 @@ async function saveBook(book) {
     if (i >= 0) d.books[i] = book; else d.books.push(book);
     lsSave(d);
   } else {
-    // coverUrl is a short string URL — keep it in Firestore for cross-device persistence
     const { id, ...data } = book;
-    // Sync coverUrl to localStorage cache too
-    if (data.coverUrl) {
-      try { const s=JSON.parse(localStorage.getItem('pageturn_covers')||'{}'); s[id]=data.coverUrl; localStorage.setItem('pageturn_covers', JSON.stringify(s)); } catch(e) {}
-    }
+    if (data.coverUrl) _lsSave(id, data.coverUrl);
     await db.collection('books').doc(id).set(data);
   }
 }
@@ -1361,122 +1356,101 @@ function circleProgressSVG(pct, color) {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// COVER SYSTEM v3 — Firestore-first persistence
+// COVER SYSTEM — Zero API calls, zero rate limits, zero CORS
 //
-// Flow:
-//   1st visit:  API fetch → save URL to Firestore book.coverUrl field
-//   All future: onSnapshot returns coverUrl already → 0 API calls
-//   localStorage: secondary speed cache for instant render
-//   _cvScheduled: global Set, NEVER cleared, prevents duplicate fetches
-//   429 back-off: pause 90s, then retry from queue
+// Uses Open Library cover CDN as a direct <img src> URL.
+// covers.openlibrary.org/b/title/TITLE-M.jpg
+// No fetch(), no API key, no CORS — browser loads it like any image.
+// Bad covers (blank 1x1) → onerror → show styled placeholder.
+// localStorage caches hit/miss so re-renders are instant.
+// coverUrl saved to Firestore → cross-device, survives page reload.
 // ═══════════════════════════════════════════════════════════════
-const coverCache   = {};        // id → url | null | undefined
-const _cvScheduled = new Set(); // ids enqueued THIS SESSION — never cleared
-const _cvQueue     = [];
-let   _cvRunning   = false;
-let   _cv429Until  = 0;
+const coverCache = {};  // id → url | 'miss' | undefined
 
 function _lsCovers() {
   try { return JSON.parse(localStorage.getItem('pageturn_covers') || '{}'); } catch(e) { return {}; }
 }
-function _lsSaveCover(id, url) {
-  try { const s = _lsCovers(); s[id] = url; localStorage.setItem('pageturn_covers', JSON.stringify(s)); } catch(e) {}
+function _lsSave(id, val) {
+  try { const s=_lsCovers(); s[id]=val; localStorage.setItem('pageturn_covers', JSON.stringify(s)); } catch(e) {}
 }
 
-async function _cvDrain() {
-  if (_cvRunning) return;
-  _cvRunning = true;
-  while (_cvQueue.length) {
-    const wait = _cv429Until - Date.now();
-    if (wait > 0) await new Promise(r => setTimeout(r, wait));
-    const task = _cvQueue.shift();
-    await task();
-    if (_cvQueue.length) await new Promise(r => setTimeout(r, 1200));
-  }
-  _cvRunning = false;
-}
-
-async function _apiFetch(book) {
-  try {
-    const q   = encodeURIComponent(book.title + ' ' + book.author);
-    const res = await fetch(`https://www.googleapis.com/books/v1/volumes?q=${q}&maxResults=1&fields=items(volumeInfo(imageLinks))`);
-    if (res.status === 429) {
-      _cv429Until = Date.now() + 90000;
-      console.warn('[Cover] 429 — pausing 90s, will retry');
-      // Re-add to front of queue for retry
-      _cvScheduled.delete(book.id);
-      _cvQueue.unshift(() => _scheduleBook(book));
-      return null;
-    }
-    const data = await res.json();
-    const img  = data?.items?.[0]?.volumeInfo?.imageLinks;
-    const url  = (img?.extraLarge||img?.large||img?.medium||img?.thumbnail||'').replace('http:','https:');
-    if (url) {
-      coverCache[book.id] = url;
-      _lsSaveCover(book.id, url);
-      // ★ Save to Firestore so future visits need 0 API calls
-      if (!useLocal && db) {
-        db.collection('books').doc(book.id).update({ coverUrl: url }).catch(() => {});
-      }
-      _swapAll(book.id, url);
-    } else {
-      coverCache[book.id] = null;
-    }
-    return url || null;
-  } catch(e) { coverCache[book.id] = null; return null; }
-}
-
-function _scheduleBook(book) {
-  if (_cvScheduled.has(book.id)) return;
-  _cvScheduled.add(book.id);
-  _cvQueue.push(() => _apiFetch(book));
-  _cvDrain();
-}
-
-// Swap ALL placeholder elements for this book (may exist on multiple tabs/pages)
-function _swapAll(id, url) {
-  const uid = 'cv_' + id.replace(/[^a-z0-9]/gi, '_');
-  document.querySelectorAll('#' + uid).forEach(el => {
-    const img = document.createElement('img');
-    img.src = url; img.className = el.className.replace(/\s*id=\S+/,''); img.loading='lazy';
-    img.style.cssText = 'opacity:0;transition:opacity 0.4s ease';
-    img.onload  = () => { img.style.opacity='1'; };
-    img.onerror = () => img.remove();
-    el.parentNode.insertBefore(img, el);
-    el.style.display = 'none';
-  });
+function _olCoverURL(book) {
+  // Open Library title-based cover — large (L), medium (M), small (S)
+  const title = (book.title || '').trim();
+  return `https://covers.openlibrary.org/b/title/${encodeURIComponent(title)}-M.jpg`;
 }
 
 function _makePH(book, cls) {
   const CC = {'Self Development':'#059669','Biography':'#7c3aed','Trading':'#d97706',
-    'Relationship':'#db2777','Mindset':'#0284c7','Finance':'#16a34a','Health':'#dc2626','Other':'#6b7280'};
-  const w = (book.title||'').split(' ').filter(Boolean);
+    'Relationship':'#db2777','Mindset':'#0284c7','Finance':'#16a34a',
+    'Health':'#dc2626','Other':'#6b7280'};
+  const w   = (book.title||'').split(' ').filter(Boolean);
   const ini = w.length>=2?(w[0][0]+w[w.length-1][0]).toUpperCase():(w[0]||'?').slice(0,2).toUpperCase();
   const col = CC[book.category]||CC.Other;
   const sh  = book.title.length>16?book.title.slice(0,14)+'…':book.title;
   return `<div class="${cls}" style="overflow:hidden"><div style="width:100%;height:100%;background:linear-gradient(160deg,${col}dd,${col}88);display:flex;flex-direction:column;align-items:center;justify-content:center;border-left:4px solid rgba(0,0,0,0.3);box-sizing:border-box;padding:4px;text-align:center;border-radius:inherit"><span style="font-size:1.2rem;font-weight:900;color:rgba(255,255,255,0.95);line-height:1">${ini}</span><span style="font-size:0.45rem;color:rgba(255,255,255,0.75);margin-top:3px;line-height:1.2;word-break:break-word">${sh}</span></div></div>`;
 }
 
-function coverThumb(book, cls, placeholderClass) {
-  // Priority: Firestore field → localStorage → in-memory cache
-  const ls  = _lsCovers();
-  const url = book.coverUrl || ls[book.id] || coverCache[book.id] || null;
-  if (url) {
-    coverCache[book.id] = url;
-    if (!ls[book.id]) _lsSaveCover(book.id, url); // warm up localStorage
-    const ph = _makePH(book, placeholderClass).replace(`class="${placeholderClass}"`, `class="${placeholderClass}" style="display:none"`);
-    return `<img src="${url}" class="${cls}" alt="${esc(book.title)}" loading="eager"
-      onerror="this.style.display='none';this.nextElementSibling.style.display='flex'" />${ph}`;
+function _onCoverLoad(img, id) {
+  // Open Library returns a 1×1 blank GIF when cover not found
+  // naturalWidth ≤ 1 means no real cover
+  if (img.naturalWidth <= 1) {
+    img.onerror();
+    return;
   }
-  // coverCache[id] === null means already tried, no image exists
-  if (coverCache[book.id] === null) return _makePH(book, placeholderClass);
-  // Schedule one fetch — _cvScheduled prevents any duplicates
-  const uid = 'cv_' + book.id.replace(/[^a-z0-9]/gi, '_');
-  _scheduleBook(book);
-  return _makePH(book, placeholderClass).replace(`class="${placeholderClass}"`, `class="${placeholderClass}" id="${uid}"`);
+  img.style.opacity = '1';
+  coverCache[id] = img.src;
+  _lsSave(id, img.src);
+  // Persist to Firestore for cross-device coverage
+  if (typeof useLocal !== 'undefined' && !useLocal && typeof db !== 'undefined') {
+    db.collection('books').doc(id).update({ coverUrl: img.src }).catch(() => {});
+  }
 }
 
-// Legacy no-op
+function _onCoverError(img, phId) {
+  img.remove();
+  coverCache[img.dataset.bookId] = 'miss';
+  _lsSave(img.dataset.bookId, 'miss');
+  const ph = document.getElementById(phId);
+  if (ph) ph.style.display = 'flex';
+}
+
+function coverThumb(book, cls, placeholderClass) {
+  const ls  = _lsCovers();
+  // Priority 1: Firestore field
+  const firestoreUrl = book.coverUrl || null;
+  if (firestoreUrl && firestoreUrl !== 'miss') {
+    coverCache[book.id] = firestoreUrl;
+    if (!ls[book.id]) _lsSave(book.id, firestoreUrl);
+  }
+  // Priority 2: localStorage or memory cache
+  const cached = coverCache[book.id] || ls[book.id] || null;
+
+  if (cached && cached !== 'miss') {
+    // Known good URL — render directly, onerror shows placeholder
+    const phId = 'ph_' + book.id.replace(/[^a-z0-9]/gi,'_');
+    const ph   = _makePH(book, placeholderClass).replace(`class="${placeholderClass}"`, `class="${placeholderClass}" id="${phId}" style="display:none"`);
+    return `<img src="${cached}" class="${cls}" alt="${esc(book.title)}" loading="eager"
+      style="opacity:1"
+      onerror="this.remove();var p=document.getElementById('${phId}');if(p)p.style.display='flex'" />${ph}`;
+  }
+
+  if (cached === 'miss') return _makePH(book, placeholderClass);
+
+  // Unknown — try Open Library CDN directly as <img src> (no fetch, no CORS, no rate limit)
+  const url   = _olCoverURL(book);
+  const uid   = 'cv_'  + book.id.replace(/[^a-z0-9]/gi,'_');
+  const phId  = 'ph_'  + book.id.replace(/[^a-z0-9]/gi,'_');
+  const ph    = _makePH(book, placeholderClass).replace(`class="${placeholderClass}"`, `class="${placeholderClass}" id="${phId}"`);
+
+  return `<img src="${url}" class="${cls}" alt="${esc(book.title)}" loading="lazy"
+    data-book-id="${book.id}"
+    style="opacity:0;transition:opacity 0.4s ease"
+    onload="_onCoverLoad(this,'${book.id}')"
+    onerror="_onCoverError(this,'${phId}')" />${ph}`;
+}
+
+// Legacy no-op (kept for safety)
 function fetchAndSwapCover() {}
 
 // ---- Render Home ----
