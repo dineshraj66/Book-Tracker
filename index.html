@@ -737,7 +737,7 @@ input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.5); cur
       <div class="form-row">
         <div class="form-group">
           <label class="form-label">Category *</label>
-          <select class="form-input" id="book-category" required>
+          <select class="form-input" id="book-category">
             <option value="">Select…</option>
             <option>Self Development</option>
             <option>Biography</option>
@@ -795,7 +795,7 @@ input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.5); cur
       <div class="form-row">
         <div class="form-group">
           <label class="form-label">Category *</label>
-          <select class="form-input" id="edit-category" required>
+          <select class="form-input" id="edit-category">
             <option value="">Select…</option>
             <option>Self Development</option>
             <option>Biography</option>
@@ -1237,6 +1237,7 @@ async function addBook() {
   const author    = document.getElementById('book-author').value.trim();
   const category  = document.getElementById('book-category').value;
   const totalPages= parseInt(document.getElementById('book-pages').value);
+  if (!category) { showToast('⚠️ Please select a category'); return; }
   const startDate = document.getElementById('book-start-date').value || todayStr();
 
   const book = {
@@ -1717,9 +1718,12 @@ function setupEditModal() {
     const book = books.find(b => b.id === id);
     if (!book) return;
 
+    const _cat = document.getElementById('edit-category').value;
+    if (!_cat) { showToast('⚠️ Please select a category'); return; }
+
     book.title      = document.getElementById('edit-title').value.trim();
     book.author     = document.getElementById('edit-author').value.trim();
-    book.category   = document.getElementById('edit-category').value;
+    book.category   = _cat;
     book.totalPages = parseInt(document.getElementById('edit-pages').value) || book.totalPages;
     book.startDate  = document.getElementById('edit-start-date').value || null;
     book.endDate    = document.getElementById('edit-end-date').value || null;
