@@ -1061,12 +1061,11 @@ async function loadData() {
           ...d.data(),
           cover: covers[d.id] || null  // restore cover from local cache
         }));
-        // Re-render whichever page is active
         const activePage = document.querySelector('.page.active')?.id?.replace('page-','');
-        if (activePage === 'home')    renderHome();
-        if (activePage === 'library') renderLibrary();
-        if (activePage === 'history') renderHistory();
-        if (activePage === 'stats')   renderStats();
+        if (activePage === 'home')    { renderHome(); renderHistory(); }
+        else if (activePage === 'library') renderLibrary();
+        else if (activePage === 'history') { renderHistory(); renderHome(); }
+        else if (activePage === 'stats')   renderStats();
         updateGoalCard();
       }, err => {
         console.error('Firestore listener failed:', err);
@@ -1260,10 +1259,21 @@ async function updatePage(bookId, newPage) {
   if (!book) return;
   newPage = Math.max(0, Math.min(newPage, book.totalPages));
   book.currentPage = newPage;
-  book.lastUpdated = new Date().toISOString(); // save full timestamp
+  book.lastUpdated = new Date().toISOString();
   const today = todayStr();
   const log = book.pageLogs.find(l => l.date === today);
   if (log) log.page = newPage; else book.pageLogs.push({ date: today, page: newPage });
+  // Auto-complete when last page reached
+  if (book.totalPages > 0 && newPage >= book.totalPages) {
+    book.status = 'completed';
+    book.endDate = today;
+    await saveBook(book);
+    updateGoalCard();
+    renderHome();
+    renderHistory();
+    showToast('🏆 Book completed! Amazing!');
+    return;
+  }
   await saveBook(book);
   renderHome();
   showToast('✅ Progress updated!');
@@ -1286,6 +1296,7 @@ window.completeBook = async function(id) {
   await saveBook(book);
   updateGoalCard();
   renderHome();
+  renderHistory();
   showToast('🏆 Book completed! Amazing!');
 };
 
@@ -1394,7 +1405,8 @@ async function fetchAndSwapCover(book, uid, cls, placeholderClass) {
 // ---- Render Home ----
 function renderHome() {
   updateGoalCard();
-  const reading = books.filter(b => b.status === 'reading');
+  const today = todayStr();
+  const reading = books.filter(b => b.status === 'reading' && (!b.startDate || b.startDate <= today) && b.currentPage < b.totalPages);
   const container = document.getElementById('current-books-container');
 
   if (!reading.length) {
@@ -1431,27 +1443,23 @@ function renderHome() {
         <div class="page-update-col">
           <div class="page-update-row">
             <input type="number" class="page-input" id="pi-${book.id}"
-              value="${book.currentPage}" min="0" max="${book.totalPages}" />
+              value="${book.currentPage}" min="0" max="${book.totalPages}"
+              onkeydown="if(event.key==='Enter'){handlePageUpdate('${book.id}');this.blur();}" />
             <span class="page-of">/ ${book.totalPages} pages</span>
-            <button class="update-btn" onclick="handlePageUpdate('${book.id}')">Update</button>
           </div>
-          <button class="complete-btn" onclick="completeBook('${book.id}')">✓ Mark Complete</button>
         </div>
       </div>
     </div>`;
   }).join('');
 
-  container.querySelectorAll('.page-input').forEach(inp => {
-    inp.addEventListener('keydown', e => {
-      if (e.key === 'Enter') handlePageUpdate(inp.id.replace('pi-', ''));
-    });
-  });
+  // page input saves on Enter via inline onkeydown
 }
 
 // ---- Render Library ----
 function renderLibrary() {
   const container = document.getElementById('library-books-container');
-  let list = books.filter(b => b.status === 'reading');
+  const today = todayStr();
+  let list = books.filter(b => b.status === 'reading' && b.startDate && b.startDate > today);
   if (catFilter !== 'all') list = list.filter(b => b.category === catFilter);
 
   document.querySelectorAll('.filter-btn').forEach(btn => {
@@ -1718,11 +1726,7 @@ function setupEditModal() {
     await saveBook(book);
     overlay.classList.remove('open');
     showToast('✅ Book updated!');
-    // Refresh whichever page is active
-    const activePage = document.querySelector('.page.active')?.id?.replace('page-','');
-    if (activePage === 'home')    renderHome();
-    if (activePage === 'library') renderLibrary();
-    if (activePage === 'history') { renderHistory(); updateGoalCard(); }
+    renderHome(); renderHistory(); renderLibrary(); updateGoalCard();
   });
 
   delBtn.addEventListener('click', async () => {
