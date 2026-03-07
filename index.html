@@ -1263,7 +1263,6 @@ async function updatePage(bookId, newPage) {
   const today = todayStr();
   const log = book.pageLogs.find(l => l.date === today);
   if (log) log.page = newPage; else book.pageLogs.push({ date: today, page: newPage });
-  // Auto-complete when last page reached
   if (book.totalPages > 0 && newPage >= book.totalPages) {
     book.status = 'completed';
     book.endDate = today;
@@ -1375,7 +1374,9 @@ function coverThumb(book, cls, placeholderClass) {
     (() => { try { return JSON.parse(localStorage.getItem('pageturn_covers') || '{}')[book.id]; } catch(e) { return null; } })();
 
   if (cached) {
-    return `<img src="${cached}" class="${cls}" alt="${esc(book.title)}" onerror="this.style.display='none';this.nextSibling.style.display='flex'" loading="lazy" />
+    return `<img src="${cached}" class="${cls}" alt="${esc(book.title)}"
+              onerror="this.style.display='none';var s=this.nextElementSibling;if(s)s.style.display='flex';delete coverCache['${book.id}'];try{var c=JSON.parse(localStorage.getItem('pageturn_covers')||'{}');delete c['${book.id}'];localStorage.setItem('pageturn_covers',JSON.stringify(c));}catch(e){}"
+              loading="lazy" />
             <div class="${placeholderClass}" style="display:none">${emoji[book.category] || '📗'}</div>`;
   }
   // Return placeholder first, then async-load cover and swap
