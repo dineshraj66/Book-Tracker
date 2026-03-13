@@ -1059,12 +1059,17 @@ async function loadData() {
         const covers = JSON.parse(localStorage.getItem('pageturn_covers') || '{}');
         books = snapshot.docs.map(d => {
           const data = d.data();
-          const validUrl = u => u && typeof u === 'string' && u.startsWith('http') ? u : null;
-          const cover = validUrl(covers[d.id]) || validUrl(data.coverUrl) || null;
-          return { id: d.id, ...data, cover, coverUrl: undefined };
+          // coverUrl = short HTTP URL stored in Firestore (skip API on next load)
+          // cover    = base64 thumb restored from localStorage only
+          return {
+            id: d.id,
+            ...data,
+            cover: _validUrl(covers[d.id]) || null,
+            coverUrl: _validUrl(data.coverUrl) || null
+          };
         });
         const activePage = document.querySelector('.page.active')?.id?.replace('page-','');
-        if (activePage === 'home')    { renderHome(); renderHistory(); }
+        if (activePage === 'home')         { renderHome(); renderHistory(); }
         else if (activePage === 'library') renderLibrary();
         else if (activePage === 'history') { renderHistory(); renderHome(); }
         else if (activePage === 'stats')   renderStats();
@@ -1102,6 +1107,7 @@ async function saveBook(book) {
       if (i >= 0) d.books[i] = book; else d.books.push(book);
       lsSave(d);
     } else {
+      // Save base64 cover only to localStorage (too large for Firestore)
       if (book.cover) {
         try {
           const covers = JSON.parse(localStorage.getItem('pageturn_covers') || '{}');
@@ -1110,9 +1116,8 @@ async function saveBook(book) {
         } catch(e) {}
       }
       const { id, cover, ...raw } = book;
-      // Remove undefined values and legacy coverUrl field
+      // Strip undefined values — Firestore rejects them
       const data = JSON.parse(JSON.stringify(raw, (k, v) => v === undefined ? null : v));
-      delete data.coverUrl;
       await db.collection('books').doc(id).set(data);
     }
   } catch(err) {
@@ -1267,7 +1272,7 @@ async function updatePage(bookId, newPage) {
   const book = books.find(b => b.id === bookId);
   if (!book) return;
   const v = parseInt(newPage);
-  if (isNaN(v) || v === book.currentPage) return; // no change, skip
+  if (isNaN(v) || v === book.currentPage) return;
   const clamped = Math.max(0, Math.min(v, book.totalPages));
   book.currentPage = clamped;
   book.lastUpdated = new Date().toISOString();
@@ -1275,8 +1280,7 @@ async function updatePage(bookId, newPage) {
   const log = book.pageLogs.find(l => l.date === today);
   if (log) log.page = clamped; else book.pageLogs.push({ date: today, page: clamped });
   if (book.totalPages > 0 && clamped >= book.totalPages) {
-    book.status = 'completed';
-    book.endDate = today;
+    book.status = 'completed'; book.endDate = today;
     await saveBook(book);
     updateGoalCard(); renderHome(); renderHistory();
     showToast('🏆 Book completed! Amazing!');
@@ -1332,83 +1336,111 @@ function circleProgressSVG(pct, color) {
   </svg>`;
 }
 
-// ---- Cover HTML ----
-// ---- Cover cache (in-memory for session) ----
+// ---- Cover system: serial queue + 429 backoff + Firestore URL persistence ----
 const coverCache = {};
+const _cq = [];           // pending fetch tasks
+let _cqRunning = false;
+let _cqPausedUntil = 0;  // epoch ms — pause queue after 429
+const _sleep = ms => new Promise(r => setTimeout(r, ms));
+const _validUrl = u => u && typeof u === 'string' && u.startsWith('http') ? u : null;
+
+async function _runQueue() {
+  if (_cqRunning) return;
+  _cqRunning = true;
+  while (_cq.length > 0) {
+    const wait = _cqPausedUntil - Date.now();
+    if (wait > 0) { await _sleep(wait); _cqPausedUntil = 0; }
+
+    const task = _cq.shift();
+
+    // Another task may have already fetched and cached this book
+    if (coverCache[task.bookId] !== undefined) {
+      task.resolve(coverCache[task.bookId]);
+      continue;
+    }
+
+    try {
+      const res = await fetch(
+        `https://www.googleapis.com/books/v1/volumes?q=${task.query}&maxResults=1&fields=items(volumeInfo(imageLinks))`
+      );
+      if (res.status === 429) {
+        // Put task back, pause the whole queue for 2 minutes
+        _cq.unshift(task);
+        _cqPausedUntil = Date.now() + 120000;
+        console.warn('[covers] 429 rate limit — pausing queue 2 min');
+        continue; // loop will hit the wait at top
+      }
+      const data = await res.json();
+      const links = data?.items?.[0]?.volumeInfo?.imageLinks;
+      const url = _validUrl(
+        (links?.extraLarge || links?.large || links?.medium || links?.thumbnail || '').replace('http:', 'https:')
+      );
+      coverCache[task.bookId] = url || null;
+      if (url) {
+        // Persist URL to localStorage
+        try {
+          const s = JSON.parse(localStorage.getItem('pageturn_covers') || '{}');
+          s[task.bookId] = url; localStorage.setItem('pageturn_covers', JSON.stringify(s));
+        } catch(e) {}
+        // Persist URL to Firestore so next load skips API entirely
+        if (!useLocal) {
+          db.collection('books').doc(task.bookId).update({ coverUrl: url }).catch(() => {});
+        }
+      }
+      task.resolve(url || null);
+    } catch(e) {
+      coverCache[task.bookId] = null;
+      task.resolve(null);
+    }
+    await _sleep(800); // 800ms between requests — ~75 req/min, well under limit
+  }
+  _cqRunning = false;
+}
 
 async function fetchCoverURL(book) {
-  if (book.cover) return book.cover;
-  const cacheKey = book.id;
-  if (coverCache[cacheKey] !== undefined) return coverCache[cacheKey];
-
-  // Check localStorage cover cache first
+  // 1. Already resolved this session
+  if (coverCache[book.id] !== undefined) return coverCache[book.id];
+  // 2. Stored in Firestore (comes in as book.coverUrl from onSnapshot)
+  const firestoreUrl = _validUrl(book.coverUrl);
+  if (firestoreUrl) { coverCache[book.id] = firestoreUrl; return firestoreUrl; }
+  // 3. Stored in localStorage
   try {
-    const stored = JSON.parse(localStorage.getItem('pageturn_covers') || '{}');
-    if (stored[book.id]) {
-      coverCache[cacheKey] = stored[book.id];
-      return stored[book.id];
-    }
+    const s = JSON.parse(localStorage.getItem('pageturn_covers') || '{}');
+    const lsUrl = _validUrl(s[book.id]);
+    if (lsUrl) { coverCache[book.id] = lsUrl; return lsUrl; }
   } catch(e) {}
-
-  // Fetch from Google Books API
-  try {
-    const q = encodeURIComponent(`${book.title} ${book.author}`);
-    const res = await fetch(`https://www.googleapis.com/books/v1/volumes?q=${q}&maxResults=1&fields=items(volumeInfo(imageLinks))`);
-    const data = await res.json();
-    const img = data?.items?.[0]?.volumeInfo?.imageLinks;
-    // Prefer high-res, fall back to thumbnail
-    const url = (img?.extraLarge || img?.large || img?.medium || img?.thumbnail || '').replace('http:', 'https:');
-    coverCache[cacheKey] = url || null;
-    // Cache to localStorage
-    if (url) {
-      try {
-        const stored = JSON.parse(localStorage.getItem('pageturn_covers') || '{}');
-        stored[book.id] = url;
-        localStorage.setItem('pageturn_covers', JSON.stringify(stored));
-      } catch(e) {}
-    }
-    return url || null;
-  } catch(e) {
-    coverCache[cacheKey] = null;
-    return null;
-  }
+  // 4. Queue a Google Books API fetch (serialized, rate-limited)
+  return new Promise(resolve => {
+    const query = encodeURIComponent(`${book.title} ${book.author}`);
+    _cq.push({ bookId: book.id, query, resolve });
+    _runQueue();
+  });
 }
 
 function coverThumb(book, cls, placeholderClass) {
   const emoji = { 'Self Development':'🌱','Biography':'👤','Trading':'📈','Relationship':'❤️','Mindset':'🧠','Finance':'💰','Health':'💪' };
-  // Use cached cover URL if available (sync check)
-  const _validUrl = u => u && typeof u === 'string' && u.startsWith('http') ? u : null;
-  const cached = _validUrl(coverCache[book.id]) || _validUrl(book.cover) ||
-    (() => { try { const v = JSON.parse(localStorage.getItem('pageturn_covers') || '{}')[book.id]; return v && v.startsWith('http') ? v : null; } catch(e) { return null; } })();
+  const cached = _validUrl(coverCache[book.id]) || _validUrl(book.coverUrl) ||
+    (() => { try { return _validUrl(JSON.parse(localStorage.getItem('pageturn_covers') || '{}')[book.id]); } catch(e) { return null; } })();
 
   if (cached) {
     return `<img src="${cached}" class="${cls}" alt="${esc(book.title)}"
               onerror="this.style.display='none';var s=this.nextElementSibling;if(s)s.style.display='flex';delete coverCache['${book.id}'];try{var c=JSON.parse(localStorage.getItem('pageturn_covers')||'{}');delete c['${book.id}'];localStorage.setItem('pageturn_covers',JSON.stringify(c));}catch(e){}"
               loading="lazy" />
-            <div class="${placeholderClass}" style="display:none">${emoji[book.category] || '📗'}</div>`;
+            <div class="${placeholderClass}" style="display:none">${emoji[book.category] || '📖'}</div>`;
   }
-  // Return placeholder first, then async-load cover and swap
   const uid = 'cv_' + book.id.replace(/[^a-z0-9]/gi, '_');
-  // Trigger async fetch after render
-  setTimeout(() => fetchAndSwapCover(book, uid, cls, placeholderClass), 0);
-  return `<div class="${placeholderClass}" id="${uid}">${emoji[book.category] || '📗'}</div>`;
-}
-
-async function fetchAndSwapCover(book, uid, cls, placeholderClass) {
-  const url = await fetchCoverURL(book);
-  if (!url) return;
-  const el = document.getElementById(uid);
-  if (!el) return; // element no longer in DOM
-  const img = document.createElement('img');
-  img.src = url;
-  img.className = cls;
-  img.alt = book.title;
-  img.loading = 'lazy';
-  img.style.opacity = '0';
-  img.style.transition = 'opacity 0.3s ease';
-  img.onerror = () => img.remove();
-  img.onload = () => { img.style.opacity = '1'; };
-  el.parentNode.replaceChild(img, el);
+  fetchCoverURL(book).then(url => {
+    if (!url) return;
+    const el = document.getElementById(uid);
+    if (!el || !el.parentNode) return;
+    const img = document.createElement('img');
+    img.src = url; img.className = cls; img.alt = book.title; img.loading = 'lazy';
+    img.style.cssText = 'opacity:0;transition:opacity 0.4s ease';
+    img.onerror = () => img.remove();
+    img.onload = () => { img.style.opacity = '1'; };
+    el.parentNode.replaceChild(img, el);
+  });
+  return `<div class="${placeholderClass}" id="${uid}">${emoji[book.category] || '📖'}</div>`;
 }
 
 // ---- Render Home ----
@@ -1738,10 +1770,7 @@ function setupEditModal() {
       overlay.classList.remove('open');
       showToast('✅ Book updated!');
       renderHome(); renderHistory(); renderLibrary(); updateGoalCard();
-    } catch(e) {
-      overlay.classList.remove('open');
-      // saveBook already shows error toast
-    }
+    } catch(e) { overlay.classList.remove('open'); }
   });
 
   delBtn.addEventListener('click', async () => {
