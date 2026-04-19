@@ -46,6 +46,8 @@ function lsSave(data) { localStorage.setItem(LS_KEY, JSON.stringify(data)); }
 let books = [];
 let goal = { year: new Date().getFullYear(), target: 20 };
 let catFilter = 'all';
+let calYear = new Date().getFullYear();
+let calMonth = new Date().getMonth();
 let coverDataUrl = null; // temp for new book
 
 // ---- Category → color ----
@@ -101,6 +103,7 @@ function goTo(page) {
   if (page === 'library') renderLibrary();
   if (page === 'history') renderHistory();
   if (page === 'stats')   renderStats();
+  if (page === 'calendar') renderCalendar();
 }
 
 // ---- Data ----
@@ -487,6 +490,8 @@ function renderStats() {
   document.getElementById('stat-shortest-streak').textContent = streaks.current  > 0 ? streaks.current  + 'd' : '—';
 
   renderChart(done);
+  renderCategoryChart();
+  renderPaceChart();
 }
 
 function calcStreaks() {
@@ -524,7 +529,7 @@ function renderChart(done) {
     const v = months[key];
     const h = Math.round((v/maxV)*H);
     const [yr,mo] = key.split('-');
-    const lbl = new Date(+yr, +mo-1).toLocaleString('en',{month:'short'});
+    const lbl = new Date(+yr, +mo-1).toLocaleString('en',{month:'short'}) + (keys.filter(k=>k.startsWith(yr)).length < keys.length ? "'" + String(yr).slice(2) : '');
     return `<div class="chart-col">
       <div class="chart-val">${v}</div>
       <div class="chart-bar" style="height:${h}px" data-val="${v}"></div>
@@ -735,3 +740,152 @@ function setupImport() {
 }
 
 // setupImport is called directly inside initApp
+
+// ================================
+//  CALENDAR
+// ================================
+function renderCalendar() {
+  const todayStr_ = todayStr();
+  const grid    = document.getElementById('cal-grid');
+  const label   = document.getElementById('cal-month-label');
+  const summary = document.getElementById('cal-summary');
+  if (!grid || !label) return;
+
+  const readDates = new Set();
+  books.forEach(b => (b.pageLogs||[]).forEach(l => { if (l.page > 0) readDates.add(l.date); }));
+
+  const sortedDates = [...readDates].sort();
+  let maxStreak = 0, curRun = 0;
+  for (let i = 0; i < sortedDates.length; i++) {
+    const diff = i === 0 ? 1 : (new Date(sortedDates[i]) - new Date(sortedDates[i-1])) / 86400000;
+    curRun = diff === 1 ? curRun + 1 : 1;
+    maxStreak = Math.max(maxStreak, curRun);
+  }
+  const streakSet = new Set();
+  const lastDate = sortedDates[sortedDates.length-1];
+  if (lastDate && (new Date(todayStr_) - new Date(lastDate)) / 86400000 <= 1) {
+    let i = sortedDates.length - 1;
+    streakSet.add(sortedDates[i]);
+    while (i > 0 && (new Date(sortedDates[i]) - new Date(sortedDates[i-1])) / 86400000 === 1) {
+      i--; streakSet.add(sortedDates[i]);
+    }
+  }
+
+  function draw() {
+    const firstDay = new Date(calYear, calMonth, 1);
+    const lastDay  = new Date(calYear, calMonth + 1, 0);
+    label.textContent = firstDay.toLocaleString('en', { month: 'long', year: 'numeric' });
+
+    const dayNames = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+    let html = '<div class="cal-weekdays">' + dayNames.map(d => `<div class="cal-wd">${d}</div>`).join('') + '</div>';
+    html += '<div class="cal-days">';
+    for (let i = 0; i < firstDay.getDay(); i++) html += '<div class="cal-day cal-empty"></div>';
+
+    let monthReadCount = 0;
+    const monthPrefix = calYear + '-' + String(calMonth+1).padStart(2,'0');
+
+    for (let d = 1; d <= lastDay.getDate(); d++) {
+      const dateStr = monthPrefix + '-' + String(d).padStart(2,'0');
+      const isToday  = dateStr === todayStr_;
+      const isRead   = readDates.has(dateStr);
+      const isStreak = streakSet.has(dateStr);
+      if (isRead) monthReadCount++;
+
+      let pagesRead = 0;
+      books.forEach(b => {
+        const log = (b.pageLogs||[]).find(l => l.date === dateStr);
+        if (!log) return;
+        const prev = (b.pageLogs||[]).filter(l => l.date < dateStr).sort((a,z) => a.date.localeCompare(z.date));
+        const prevPage = prev.length ? prev[prev.length-1].page : 0;
+        pagesRead += Math.max(0, log.page - prevPage);
+      });
+
+      let cls = 'cal-day';
+      if (isRead)   cls += ' cal-read';
+      if (isStreak) cls += ' cal-streak';
+      if (isToday)  cls += ' cal-today';
+
+      const tick  = isRead   ? '<div class="cal-tick">&#10003;</div>' : '';
+      const pages = pagesRead > 0 ? `<div class="cal-pages">${pagesRead}p</div>` : '';
+      html += `<div class="${cls}" title="${pagesRead > 0 ? pagesRead+' pages' : ''}">
+        <div class="cal-day-num">${d}</div>${tick}${pages}
+      </div>`;
+    }
+    html += '</div>';
+    grid.innerHTML = html;
+
+    const monthDone = books.filter(b => b.status === 'completed' && (b.endDate||'').startsWith(monthPrefix)).length;
+    let totalPages = 0;
+    books.forEach(b => {
+      const logs = (b.pageLogs||[]).filter(l => l.date.startsWith(monthPrefix)).sort((a,z)=>a.date.localeCompare(z.date));
+      if (!logs.length) return;
+      const before = (b.pageLogs||[]).filter(l => l.date < monthPrefix+'-01').sort((a,z)=>a.date.localeCompare(z.date));
+      const startPage = before.length ? before[before.length-1].page : 0;
+      totalPages += Math.max(0, logs[logs.length-1].page - startPage);
+    });
+    if (summary) summary.innerHTML = `
+      <div class="cal-stat"><span class="cal-stat-n">${monthReadCount}</span><span>Days Read</span></div>
+      <div class="cal-stat"><span class="cal-stat-n">${totalPages}</span><span>Pages</span></div>
+      <div class="cal-stat"><span class="cal-stat-n">${monthDone}</span><span>Books Done</span></div>
+      <div class="cal-stat"><span class="cal-stat-n">${maxStreak}d</span><span>Best Streak</span></div>`;
+  }
+
+  draw();
+  const prev = document.getElementById('cal-prev');
+  const next = document.getElementById('cal-next');
+  prev.onclick = () => { calMonth--; if (calMonth < 0) { calMonth=11; calYear--; } draw(); };
+  next.onclick = () => { calMonth++; if (calMonth > 11) { calMonth=0; calYear++; } draw(); };
+}
+
+// ================================
+//  CATEGORY CHART
+// ================================
+function renderCategoryChart() {
+  const container = document.getElementById('category-chart');
+  if (!container) return;
+  const cats = {};
+  books.filter(b => b.status === 'completed').forEach(b => {
+    cats[b.category || 'Other'] = (cats[b.category || 'Other'] || 0) + 1;
+  });
+  const entries = Object.entries(cats).sort((a,b) => b[1]-a[1]);
+  if (!entries.length) {
+    container.innerHTML = '<div style="color:var(--text3);text-align:center;padding:1.5rem;font-size:0.85rem;">No completed books yet</div>';
+    return;
+  }
+  const total = entries.reduce((s,[,v]) => s+v, 0);
+  const catColors = { 'Self Development':'#34d399','Biography':'#a78bfa','Trading':'#fbbf24','Relationship':'#fb7185','Mindset':'#38bdf8','Finance':'#34d399','Health':'#fb7185' };
+  container.innerHTML = entries.map(([cat, count]) => {
+    const pct = Math.round((count/total)*100);
+    const color = catColors[cat] || '#38bdf8';
+    return `<div class="cat-chart-row">
+      <div class="cat-chart-label">${esc(cat)}</div>
+      <div class="cat-chart-track"><div class="cat-chart-fill" style="width:${pct}%;background:${color}"></div></div>
+      <div class="cat-chart-val" style="color:${color}">${count}</div>
+    </div>`;
+  }).join('');
+}
+
+// ================================
+//  READING PACE CHART
+// ================================
+function renderPaceChart() {
+  const container = document.getElementById('pace-chart');
+  if (!container) return;
+  const done = books.filter(b => b.status==='completed' && b.totalPages>0 && b.startDate && b.endDate)
+    .sort((a,b) => (a.endDate||'').localeCompare(b.endDate||'')).slice(-10);
+  if (!done.length) {
+    container.innerHTML = '<div style="color:var(--text3);text-align:center;padding:1.5rem;font-size:0.85rem;">No data yet</div>';
+    return;
+  }
+  const paces = done.map(b => ({ title: b.title, pace: Math.round(b.totalPages / Math.max(1, daysBetween(b.startDate, b.endDate))) }));
+  const maxPace = Math.max(...paces.map(p => p.pace), 1);
+  container.innerHTML = `<div class="chart-bars" style="height:130px">${paces.map(p => {
+    const h = Math.round((p.pace/maxPace)*110);
+    const short = p.title.length > 10 ? p.title.slice(0,9)+'…' : p.title;
+    return `<div class="chart-col" style="min-width:52px">
+      <div class="chart-val">${p.pace}</div>
+      <div class="chart-bar" style="height:${h}px;background:linear-gradient(180deg,var(--purple),var(--teal-dim))" title="${esc(p.title)}: ${p.pace} pg/day"></div>
+      <div class="chart-month" style="max-width:52px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(p.title)}">${esc(short)}</div>
+    </div>`;
+  }).join('')}</div>`;
+}

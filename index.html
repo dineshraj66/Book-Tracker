@@ -473,6 +473,7 @@ input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.5); cur
   bottom: calc(var(--bnav-h) + 0.75rem);
   left: 50%;
   transform: translateX(-50%) translateY(120px);
+  pointer-events: none;
   width: calc(100vw - 2rem);
   max-width: 480px;
   background: var(--surface2);
@@ -602,6 +603,41 @@ input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.5); cur
 }
 .pwa-diag-close:hover { background: var(--surface); }
 
+
+.cal-weekdays{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;margin-bottom:3px}
+.cal-wd{text-align:center;font-size:0.6rem;font-weight:700;color:var(--text3);padding:0.3rem 0;text-transform:uppercase;letter-spacing:0.04em}
+.cal-days{display:grid;grid-template-columns:repeat(7,1fr);gap:3px}
+.cal-day{background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:0.35rem 0.2rem 0.2rem;min-height:56px;display:flex;flex-direction:column;align-items:center;cursor:default;transition:border-color 0.15s,transform 0.15s}
+.cal-day:hover:not(.cal-empty){border-color:rgba(56,189,248,0.35);transform:scale(1.05);z-index:1}
+.cal-empty{background:transparent;border-color:transparent;pointer-events:none}
+.cal-day-num{font-size:0.72rem;font-weight:700;color:var(--text3);line-height:1}
+.cal-read{background:rgba(52,211,153,0.1);border-color:rgba(52,211,153,0.3)}
+.cal-read .cal-day-num{color:var(--green)}
+.cal-streak{background:rgba(251,191,36,0.1);border-color:rgba(251,191,36,0.35)}
+.cal-streak .cal-day-num{color:var(--amber)}
+.cal-today{border-color:var(--teal)!important;background:rgba(56,189,248,0.1)}
+.cal-today .cal-day-num{color:var(--teal);font-weight:900}
+.cal-tick{font-size:0.85rem;color:var(--green);font-weight:900;line-height:1;margin-top:2px}
+.cal-streak .cal-tick{color:var(--amber)}
+.cal-pages{font-size:0.5rem;color:var(--text3);margin-top:2px}
+.cal-summary{display:flex;gap:0.5rem;margin-top:1.25rem;flex-wrap:wrap}
+.cal-stat{flex:1;min-width:70px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:0.9rem 0.5rem;text-align:center;display:flex;flex-direction:column;gap:0.2rem}
+.cal-stat-n{font-family:var(--font-h);font-size:1.5rem;font-weight:700;color:var(--teal);line-height:1}
+.cal-stat span:last-child{font-size:0.6rem;color:var(--text3);text-transform:uppercase;letter-spacing:0.07em}
+.cal-nav{display:flex;align-items:center;gap:0.5rem;flex-shrink:0;margin-top:0.25rem}
+.cal-nav-btn{background:var(--surface2);border:1px solid var(--border);color:var(--text);font-size:1.3rem;font-weight:700;width:34px;height:34px;border-radius:10px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background 0.2s}
+.cal-nav-btn:hover{background:var(--surface3);color:var(--teal)}
+.cal-month-label{font-family:var(--font-h);font-size:1rem;font-weight:700;color:var(--text);min-width:140px;text-align:center}
+.cal-legend{display:flex;gap:1rem;margin-bottom:1rem;flex-wrap:wrap}
+.cal-legend-item{display:flex;align-items:center;gap:0.35rem;font-size:0.72rem;color:var(--text2);font-weight:600}
+.cal-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+.read-dot{background:var(--green)}.today-dot{background:var(--teal)}.streak-dot{background:var(--amber)}
+.cat-chart-row{display:flex;align-items:center;gap:0.75rem;margin-bottom:0.75rem}
+.cat-chart-label{font-size:0.78rem;font-weight:700;color:var(--text2);min-width:115px;flex-shrink:0}
+.cat-chart-track{flex:1;height:10px;background:var(--surface3);border-radius:5px;overflow:hidden}
+.cat-chart-fill{height:100%;border-radius:5px;transition:width 0.6s ease}
+.cat-chart-val{font-size:0.82rem;font-weight:800;min-width:20px;text-align:right;flex-shrink:0}
+@media(max-width:480px){.cal-day{min-height:44px;padding:0.25rem 0.1rem;border-radius:7px}.cal-day-num{font-size:0.6rem}.cal-pages{display:none}.cal-month-label{font-size:0.82rem;min-width:100px}}
   </style>
 </head>
 <body>
@@ -616,6 +652,7 @@ input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.5); cur
       <li><a class="nav-link" data-page="library" href="#">📚 <span>Library</span></a></li>
       <li><a class="nav-link" data-page="history" href="#">✅ <span>History</span></a></li>
       <li><a class="nav-link" data-page="stats" href="#">📊 <span>Stats</span></a></li>
+      <li><a class="nav-link" data-page="calendar" href="#">📅 <span>Calendar</span></a></li>
     </ul>
     <button class="sidebar-fab" id="fab-desktop">＋ Add Book</button>
     <button class="sidebar-sync-btn" id="sidebar-sync-btn">🔄 Sync Devices</button>
@@ -693,6 +730,32 @@ input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.5); cur
       </div>
       <div class="section-label" style="margin-top:2rem">Books per Month</div>
       <div class="chart-wrap" id="monthly-chart"></div>
+
+      <div class="section-label" style="margin-top:2rem">Books by Category</div>
+      <div class="chart-wrap" id="category-chart"></div>
+
+      <div class="section-label" style="margin-top:2rem">Reading Pace <span style="font-size:0.65rem;color:var(--text3);text-transform:none;letter-spacing:0">(pages/day &middot; last 10 books)</span></div>
+      <div class="chart-wrap" style="overflow-x:auto" id="pace-chart"></div>
+    </section>
+      <section class="page" id="page-calendar">
+      <header class="page-header">
+        <div>
+          <p class="page-sub">Your reading journey</p>
+          <h1 class="page-title">Calendar</h1>
+        </div>
+        <div class="cal-nav">
+          <button class="cal-nav-btn" id="cal-prev">&lsaquo;</button>
+          <span class="cal-month-label" id="cal-month-label"></span>
+          <button class="cal-nav-btn" id="cal-next">&rsaquo;</button>
+        </div>
+      </header>
+      <div class="cal-legend">
+        <span class="cal-legend-item"><span class="cal-dot read-dot"></span> Read</span>
+        <span class="cal-legend-item"><span class="cal-dot today-dot"></span> Today</span>
+        <span class="cal-legend-item"><span class="cal-dot streak-dot"></span> Streak</span>
+      </div>
+      <div class="cal-grid" id="cal-grid"></div>
+      <div class="cal-summary" id="cal-summary"></div>
     </section>
   </main>
 
@@ -702,6 +765,7 @@ input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.5); cur
     <div class="bnav-center"><button class="fab-btn" id="fab-main">＋</button></div>
     <a class="bnav-item" data-page="history" href="#"><span class="bnav-ico">✅</span><span class="bnav-lbl">History</span></a>
     <a class="bnav-item" data-page="stats" href="#"><span class="bnav-ico">📊</span><span class="bnav-lbl">Stats</span></a>
+    <a class="bnav-item" data-page="calendar" href="#"><span class="bnav-ico">📅</span><span class="bnav-lbl">Cal</span></a>
   </nav>
 </div>
 
@@ -1039,6 +1103,7 @@ function goTo(page) {
   if (page === 'library') renderLibrary();
   if (page === 'history') renderHistory();
   if (page === 'stats')   renderStats();
+  if (page === 'calendar') renderCalendar();
 }
 
 // ---- Data ----
@@ -1073,6 +1138,7 @@ async function loadData() {
         else if (activePage === 'library') renderLibrary();
         else if (activePage === 'history') { renderHistory(); renderHome(); }
         else if (activePage === 'stats')   renderStats();
+        else if (activePage === 'calendar') renderCalendar();
         updateGoalCard();
       }, err => {
         console.error('Firestore listener failed:', err);
@@ -1598,6 +1664,8 @@ function renderStats() {
   document.getElementById('stat-shortest-streak').textContent = streaks.current  > 0 ? streaks.current  + 'd' : '—';
 
   renderChart(done);
+  renderCategoryChart();
+  renderPaceChart();
 }
 
 function calcStreaks() {
@@ -2026,7 +2094,7 @@ function setupImport() {
   const SW_CODE = `const CACHE = 'pageturn-v4';
 self.addEventListener('install', e => {
   self.skipWaiting();
-  e.waitUntil(caches.open(CACHE).then(c => c.add('/')).catch(()=>{}));
+  e.waitUntil(Promise.resolve());
 });
 self.addEventListener('activate', e => {
   e.waitUntil(
@@ -2109,6 +2177,56 @@ self.addEventListener('fetch', e => {
     banner.classList.remove('show');
   });
 })();
+
+let calYear = new Date().getFullYear();
+let calMonth = new Date().getMonth();
+function renderCalendar() {
+  const todayStr_=todayStr(),grid=document.getElementById('cal-grid'),label=document.getElementById('cal-month-label'),summary=document.getElementById('cal-summary');
+  if(!grid||!label)return;
+  const readDates=new Set();
+  books.forEach(b=>(b.pageLogs||[]).forEach(l=>{if(l.page>0)readDates.add(l.date);}));
+  const sd=[...readDates].sort();let maxStreak=0,curRun=0;
+  for(let i=0;i<sd.length;i++){const diff=i===0?1:(new Date(sd[i])-new Date(sd[i-1]))/86400000;curRun=diff===1?curRun+1:1;maxStreak=Math.max(maxStreak,curRun);}
+  const streakSet=new Set(),ld=sd[sd.length-1];
+  if(ld&&(new Date(todayStr_)-new Date(ld))/86400000<=1){let i=sd.length-1;streakSet.add(sd[i]);while(i>0&&(new Date(sd[i])-new Date(sd[i-1]))/86400000===1){i--;streakSet.add(sd[i]);}}
+  function draw(){
+    const fd=new Date(calYear,calMonth,1),ld2=new Date(calYear,calMonth+1,0);
+    label.textContent=fd.toLocaleString('en',{month:'long',year:'numeric'});
+    let h='<div class="cal-weekdays">'+['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d=>'<div class="cal-wd">'+d+'</div>').join('')+'</div>';
+    h+='<div class="cal-days">';
+    for(let i=0;i<fd.getDay();i++)h+='<div class="cal-day cal-empty"></div>';
+    let mrc=0;const mp=calYear+'-'+String(calMonth+1).padStart(2,'0');
+    for(let d=1;d<=ld2.getDate();d++){
+      const ds=mp+'-'+String(d).padStart(2,'0'),isT=ds===todayStr_,isR=readDates.has(ds),isS=streakSet.has(ds);
+      if(isR)mrc++;
+      let pr=0;books.forEach(b=>{const log=(b.pageLogs||[]).find(l=>l.date===ds);if(!log)return;const prev=(b.pageLogs||[]).filter(l=>l.date<ds).sort((a,z)=>a.date.localeCompare(z.date));pr+=Math.max(0,log.page-(prev.length?prev[prev.length-1].page:0));});
+      let cls='cal-day'+(isR?' cal-read':'')+(isS?' cal-streak':'')+(isT?' cal-today':'');
+      h+='<div class="'+cls+'"><div class="cal-day-num">'+d+'</div>'+(isR?'<div class="cal-tick">&#10003;</div>':'')+(pr>0?'<div class="cal-pages">'+pr+'p</div>':'')+'</div>';
+    }
+    h+='</div>';grid.innerHTML=h;
+    const md=books.filter(b=>b.status==='completed'&&(b.endDate||'').startsWith(mp)).length;
+    let tp=0;books.forEach(b=>{const logs=(b.pageLogs||[]).filter(l=>l.date.startsWith(mp)).sort((a,z)=>a.date.localeCompare(z.date));if(!logs.length)return;const before=(b.pageLogs||[]).filter(l=>l.date<mp+'-01').sort((a,z)=>a.date.localeCompare(z.date));tp+=Math.max(0,logs[logs.length-1].page-(before.length?before[before.length-1].page:0));});
+    if(summary)summary.innerHTML='<div class="cal-stat"><span class="cal-stat-n">'+mrc+'</span><span>Days Read</span></div><div class="cal-stat"><span class="cal-stat-n">'+tp+'</span><span>Pages</span></div><div class="cal-stat"><span class="cal-stat-n">'+md+'</span><span>Books Done</span></div><div class="cal-stat"><span class="cal-stat-n">'+maxStreak+'d</span><span>Best Streak</span></div>';
+  }
+  draw();
+  document.getElementById('cal-prev').onclick=()=>{calMonth--;if(calMonth<0){calMonth=11;calYear--;}draw();};
+  document.getElementById('cal-next').onclick=()=>{calMonth++;if(calMonth>11){calMonth=0;calYear++;}draw();};
+}
+function renderCategoryChart(){
+  const c=document.getElementById('category-chart');if(!c)return;
+  const cats={};books.filter(b=>b.status==='completed').forEach(b=>{cats[b.category||'Other']=(cats[b.category||'Other']||0)+1;});
+  const entries=Object.entries(cats).sort((a,b)=>b[1]-a[1]);
+  if(!entries.length){c.innerHTML='<div style="color:var(--text3);text-align:center;padding:1.5rem;font-size:0.85rem;">No completed books yet</div>';return;}
+  const total=entries.reduce((s,[,v])=>s+v,0),cc={'Self Development':'#34d399','Biography':'#a78bfa','Trading':'#fbbf24','Relationship':'#fb7185','Mindset':'#38bdf8','Finance':'#34d399','Health':'#fb7185'};
+  c.innerHTML=entries.map(([cat,count])=>{const pct=Math.round((count/total)*100),color=cc[cat]||'#38bdf8';return '<div class="cat-chart-row"><div class="cat-chart-label">'+esc(cat)+'</div><div class="cat-chart-track"><div class="cat-chart-fill" style="width:'+pct+'%;background:'+color+'"></div></div><div class="cat-chart-val" style="color:'+color+'">'+count+'</div></div>';}).join('');
+}
+function renderPaceChart(){
+  const c=document.getElementById('pace-chart');if(!c)return;
+  const done=books.filter(b=>b.status==='completed'&&b.totalPages>0&&b.startDate&&b.endDate).sort((a,b)=>(a.endDate||'').localeCompare(b.endDate||'')).slice(-10);
+  if(!done.length){c.innerHTML='<div style="color:var(--text3);text-align:center;padding:1.5rem;font-size:0.85rem;">No data yet</div>';return;}
+  const paces=done.map(b=>({title:b.title,pace:Math.round(b.totalPages/Math.max(1,daysBetween(b.startDate,b.endDate)))})),maxP=Math.max(...paces.map(p=>p.pace),1);
+  c.innerHTML='<div class="chart-bars" style="height:130px">'+paces.map(p=>{const h2=Math.round((p.pace/maxP)*110),s=p.title.length>10?p.title.slice(0,9)+'…':p.title;return '<div class="chart-col" style="min-width:52px"><div class="chart-val">'+p.pace+'</div><div class="chart-bar" style="height:'+h2+'px;background:linear-gradient(180deg,var(--purple),var(--teal-dim))"></div><div class="chart-month" style="max-width:52px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(s)+'</div></div>';}).join('')+'</div>';
+}
 </script>
 </body>
 </html>
